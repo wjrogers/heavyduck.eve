@@ -27,19 +27,25 @@ namespace HeavyDuck.Eve
             return QueryCharacterApi(@"/char/CharacterSheet.xml.aspx", userID, apiKey, characterID);
         }
 
-        public static string QueryAccountApi(string apiPath, int userID, string apiKey)
+        public static string GetCharacterAssetList(int userID, string apiKey, int characterID)
+        {
+            return QueryCharacterApi(@"/char/AssetList.xml.aspx", userID, apiKey, characterID);
+        }
+
+        private static string QueryAccountApi(string apiPath, int userID, string apiKey)
         {
             Dictionary<string, string> parameters = new Dictionary<string, string>(2);
 
             // add the standard parameters
             parameters["userID"] = userID.ToString();
             parameters["apiKey"] = apiKey;
+            parameters["version"] = "2";
 
             // call the basic query method
             return QueryApi(apiPath, parameters);
         }
 
-        public static string QueryCharacterApi(string apiPath, int userID, string apiKey, int characterID)
+        private static string QueryCharacterApi(string apiPath, int userID, string apiKey, int characterID)
         {
             Dictionary<string, string> parameters = new Dictionary<string, string>(2);
 
@@ -47,6 +53,7 @@ namespace HeavyDuck.Eve
             parameters["userID"] = userID.ToString();
             parameters["apiKey"] = apiKey;
             parameters["characterID"] = characterID.ToString();
+            parameters["version"] = "2";
 
             // call the basic query method
             return QueryApi(apiPath, parameters);
@@ -130,12 +137,12 @@ namespace HeavyDuck.Eve
             return cachePath;
         }
 
-        public static bool IsFileCached(string apiPath, IDictionary<string, string> parameters)
+        private static bool IsFileCached(string apiPath, IDictionary<string, string> parameters)
         {
             return IsFileCached(GetCachePath(apiPath, parameters));
         }
 
-        public static bool IsFileCached(string filePath)
+        private static bool IsFileCached(string filePath)
         {
             // check whether it even exists
             if (!File.Exists(filePath)) return false;
@@ -164,7 +171,7 @@ namespace HeavyDuck.Eve
             }
         }
 
-        public static string GetCachePath(string apiPath, IDictionary<string, string> parameters)
+        private static string GetCachePath(string apiPath, IDictionary<string, string> parameters)
         {
             string mungedApiPath;
             string paramHash;
