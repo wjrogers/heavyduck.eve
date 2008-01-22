@@ -92,11 +92,12 @@ namespace HeavyDuck.Eve
 
             // create our request crap
             Uri uri = new Uri(m_apiRoot, apiPath);
-            WebRequest request = HttpWebRequest.Create(uri);
+            HttpWebRequest request = (HttpWebRequest)HttpWebRequest.Create(uri);
 
             // set the standard request properties
             request.ContentType = "application/x-www-form-urlencoded";
             request.Method = "POST";
+            request.UserAgent = "EVE Asset Manager";
 
             // write the request
             using (Stream s = request.GetRequestStream())
