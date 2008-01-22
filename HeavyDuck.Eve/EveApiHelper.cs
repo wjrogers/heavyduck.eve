@@ -32,9 +32,14 @@ namespace HeavyDuck.Eve
             return QueryCharacterApi(@"/char/AssetList.xml.aspx", userID, apiKey, characterID);
         }
 
+        public static string GetCorporationAssetList(int userID, string apiKey, int characterID, int corporationID)
+        {
+            return QueryCorporationApi(@"/corp/AssetList.xml.aspx", userID, apiKey, characterID, corporationID);
+        }
+
         private static string QueryAccountApi(string apiPath, int userID, string apiKey)
         {
-            Dictionary<string, string> parameters = new Dictionary<string, string>(2);
+            Dictionary<string, string> parameters = new Dictionary<string, string>();
 
             // add the standard parameters
             parameters["userID"] = userID.ToString();
@@ -47,12 +52,27 @@ namespace HeavyDuck.Eve
 
         private static string QueryCharacterApi(string apiPath, int userID, string apiKey, int characterID)
         {
-            Dictionary<string, string> parameters = new Dictionary<string, string>(2);
+            Dictionary<string, string> parameters = new Dictionary<string, string>();
 
             // add the standard parameters
             parameters["userID"] = userID.ToString();
             parameters["apiKey"] = apiKey;
             parameters["characterID"] = characterID.ToString();
+            parameters["version"] = "2";
+
+            // call the basic query method
+            return QueryApi(apiPath, parameters);
+        }
+
+        private static string QueryCorporationApi(string apiPath, int userID, string apiKey, int characterID, int corporationID)
+        {
+            Dictionary<string, string> parameters = new Dictionary<string, string>();
+
+            // add the standard parameters
+            parameters["userID"] = userID.ToString();
+            parameters["apiKey"] = apiKey;
+            parameters["characterID"] = characterID.ToString();
+            parameters["corporationID"] = corporationID.ToString();
             parameters["version"] = "2";
 
             // call the basic query method
