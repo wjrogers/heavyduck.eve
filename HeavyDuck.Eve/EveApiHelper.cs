@@ -96,6 +96,7 @@ namespace HeavyDuck.Eve
 
             // set the standard request properties
             request.ContentType = "application/x-www-form-urlencoded";
+            request.KeepAlive = false;
             request.Method = "POST";
             request.UserAgent = "EVE Asset Manager";
 
