@@ -138,8 +138,13 @@ namespace HeavyDuck.Eve
                     XPathNavigator nav = doc.CreateNavigator();
                     XPathNavigator errorNode = nav.SelectSingleNode("/eveapi/error");
 
+                    // check if there was an error node
                     if (errorNode != null)
                         throw new EveApiException(errorNode.SelectSingleNode("@code").ValueAsInt, errorNode.Value);
+
+                    // now check if there appears to at least be an eveapi node
+                    if (nav.SelectSingleNode("/eveapi") == null)
+                        throw new EveApiException(0, "No valid eveapi XML found in response.");
                 }
 
                 // we now assume the file is valid and copy it to the cache path
