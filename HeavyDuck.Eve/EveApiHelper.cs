@@ -13,9 +13,7 @@ namespace HeavyDuck.Eve
     {
         private static readonly Uri m_apiRoot = new Uri(@"http://api.eve-online.com/");
         private static readonly Regex m_regexAspx = new Regex(@"\.aspx$");
-        private static readonly string m_cacheRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"HeavyDuck.Eve");
         private static readonly UTF8Encoding m_encoding = new UTF8Encoding(false);
-        private static readonly System.Security.Cryptography.MD5 m_md5 = System.Security.Cryptography.MD5.Create();
 
         public static string GetCharacters(int userID, string apiKey)
         {
@@ -92,13 +90,13 @@ namespace HeavyDuck.Eve
 
             // create our request crap
             Uri uri = new Uri(m_apiRoot, apiPath);
-            HttpWebRequest request = (HttpWebRequest)HttpWebRequest.Create(uri);
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(uri);
 
             // set the standard request properties
             request.ContentType = "application/x-www-form-urlencoded";
             request.KeepAlive = false;
             request.Method = "POST";
-            request.UserAgent = "EVE Asset Manager";
+            request.UserAgent = Resources.USER_AGENT;
 
             // write the request
             using (Stream s = request.GetRequestStream())
@@ -109,7 +107,6 @@ namespace HeavyDuck.Eve
 
             // prep to handle response
             WebResponse response = null;
-            int offset, bytesRead;
             string tempPath = null;
 
             try
@@ -120,15 +117,7 @@ namespace HeavyDuck.Eve
                 // read the response and write it to the temp file
                 using (Stream input = response.GetResponseStream())
                 {
-                    tempPath = Path.GetTempFileName();
-                    buffer = new byte[32 * 1024];
-                    offset = 0;
-
-                    using (FileStream output = File.Open(tempPath, FileMode.Open, FileAccess.Write))
-                    {
-                        while (0 < (bytesRead = input.Read(buffer, offset, buffer.Length)))
-                            output.Write(buffer, 0, bytesRead);
-                    }
+                    tempPath = Resources.DownloadStream(input);
                 }
 
                 // inspect the resulting file for errors
@@ -211,11 +200,11 @@ namespace HeavyDuck.Eve
             mungedApiPath = mungedApiPath.Replace('/', '.');
 
             // get the parameters and hash them, then stick the hash in the filename
-            paramHash = BitConverter.ToString(m_md5.ComputeHash(m_encoding.GetBytes(GetEncodedParameters(parameters)))).Replace("-", "");
+            paramHash = BitConverter.ToString(Resources.MD5.ComputeHash(m_encoding.GetBytes(GetEncodedParameters(parameters)))).Replace("-", "");
             mungedApiPath = mungedApiPath.Insert(mungedApiPath.LastIndexOf('.'), "." + paramHash);
 
             // make sure the directory exists before returning this path
-            cachePath = Path.Combine(m_cacheRoot, mungedApiPath);
+            cachePath = Path.Combine(Resources.CacheRoot, mungedApiPath);
             dirPath = Path.GetDirectoryName(cachePath);
             if (!Directory.Exists(dirPath))
                 Directory.CreateDirectory(dirPath);
