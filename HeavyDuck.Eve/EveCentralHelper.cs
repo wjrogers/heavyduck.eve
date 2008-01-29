@@ -154,9 +154,15 @@ namespace HeavyDuck.Eve
                 XPathNavigator node = nav.SelectSingleNode("/market_stat/avg_price");
 
                 if (node == null)
-                    return -1;
+                {
+                    throw new ArgumentException("File '" + path + "' does not contain a /market_stat/avg_price node.");
+                }
                 else
-                    return node.ValueAsDouble;
+                {
+                    // if the node is there, but the value is "None" or some such, return 0 to indicate "this file is OK, but there is no price"
+                    try { return node.ValueAsDouble; }
+                    catch (FormatException) { return 0; }
+                }
             }
         }
 
