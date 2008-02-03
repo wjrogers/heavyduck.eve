@@ -15,27 +15,27 @@ namespace HeavyDuck.Eve
         private static readonly Regex m_regexAspx = new Regex(@"\.aspx$");
         private static readonly UTF8Encoding m_encoding = new UTF8Encoding(false);
 
-        public static string GetCharacters(int userID, string apiKey)
+        public static CachedResult GetCharacters(int userID, string apiKey)
         {
             return QueryAccountApi(@"/account/Characters.xml.aspx", userID, apiKey);
         }
 
-        public static string GetCharacterSheet(int userID, string apiKey, int characterID)
+        public static CachedResult GetCharacterSheet(int userID, string apiKey, int characterID)
         {
             return QueryCharacterApi(@"/char/CharacterSheet.xml.aspx", userID, apiKey, characterID);
         }
 
-        public static string GetCharacterAssetList(int userID, string apiKey, int characterID)
+        public static CachedResult GetCharacterAssetList(int userID, string apiKey, int characterID)
         {
             return QueryCharacterApi(@"/char/AssetList.xml.aspx", userID, apiKey, characterID);
         }
 
-        public static string GetCorporationAssetList(int userID, string apiKey, int characterID, int corporationID)
+        public static CachedResult GetCorporationAssetList(int userID, string apiKey, int characterID, int corporationID)
         {
             return QueryCorporationApi(@"/corp/AssetList.xml.aspx", userID, apiKey, characterID, corporationID);
         }
 
-        private static string QueryAccountApi(string apiPath, int userID, string apiKey)
+        private static CachedResult QueryAccountApi(string apiPath, int userID, string apiKey)
         {
             Dictionary<string, string> parameters = new Dictionary<string, string>();
 
@@ -48,7 +48,7 @@ namespace HeavyDuck.Eve
             return QueryApi(apiPath, parameters);
         }
 
-        private static string QueryCharacterApi(string apiPath, int userID, string apiKey, int characterID)
+        private static CachedResult QueryCharacterApi(string apiPath, int userID, string apiKey, int characterID)
         {
             Dictionary<string, string> parameters = new Dictionary<string, string>();
 
@@ -62,7 +62,7 @@ namespace HeavyDuck.Eve
             return QueryApi(apiPath, parameters);
         }
 
-        private static string QueryCorporationApi(string apiPath, int userID, string apiKey, int characterID, int corporationID)
+        private static CachedResult QueryCorporationApi(string apiPath, int userID, string apiKey, int characterID, int corporationID)
         {
             Dictionary<string, string> parameters = new Dictionary<string, string>();
 
@@ -77,16 +77,18 @@ namespace HeavyDuck.Eve
             return QueryApi(apiPath, parameters);
         }
 
-        public static string QueryApi(string apiPath, IDictionary<string, string> parameters)
+        public static CachedResult QueryApi(string apiPath, IDictionary<string, string> parameters)
         {
             byte[] buffer;
             string cachePath = GetCachePath(apiPath, parameters);
+            CacheState currentState;
 
             // check parameters
             if (string.IsNullOrEmpty(apiPath)) throw new ArgumentNullException("apiPath");
 
             // check whether the thing is already cached anyway
-            if (IsFileCached(cachePath)) return cachePath;
+            currentState = IsFileCached(cachePath);
+            if (currentState == CacheState.Cached) return new CachedResult(cachePath, false, currentState, null);
 
             // create our request crap
             Uri uri = new Uri(m_apiRoot, apiPath);
@@ -98,19 +100,19 @@ namespace HeavyDuck.Eve
             request.Method = "POST";
             request.UserAgent = Resources.USER_AGENT;
 
-            // write the request
-            using (Stream s = request.GetRequestStream())
-            {
-                buffer = m_encoding.GetBytes(GetEncodedParameters(parameters));
-                s.Write(buffer, 0, buffer.Length);
-            }
-
             // prep to handle response
             WebResponse response = null;
             string tempPath = null;
 
             try
             {
+                // write the request
+                using (Stream s = request.GetRequestStream())
+                {
+                    buffer = m_encoding.GetBytes(GetEncodedParameters(parameters));
+                    s.Write(buffer, 0, buffer.Length);
+                }
+
                 // here we actually send the request and get a response (we hope)
                 response = request.GetResponse();
 
@@ -138,6 +140,17 @@ namespace HeavyDuck.Eve
 
                 // we now assume the file is valid and copy it to the cache path
                 File.Copy(tempPath, cachePath, true);
+
+                // return success
+                return new CachedResult(cachePath, true, CacheState.Cached, null);
+            }
+            catch (Exception ex)
+            {
+                // if we currently have a valid local copy of the file, even if out of date, return that info
+                if (currentState != CacheState.Uncached)
+                    return new CachedResult(cachePath, false, currentState, ex);
+                else
+                    return new CachedResult(null, false, CacheState.Uncached, ex);
             }
             finally
             {
@@ -148,20 +161,26 @@ namespace HeavyDuck.Eve
                 try { if (!string.IsNullOrEmpty(tempPath)) File.Delete(tempPath); }
                 catch { /* pass */ }
             }
-
-            // return the path to the file we downloaded
-            return cachePath;
         }
 
-        private static bool IsFileCached(string apiPath, IDictionary<string, string> parameters)
+        /// <summary>
+        /// Checks the state of the cache for a particular file.
+        /// </summary>
+        /// <param name="apiPath">The EVE API path used to retrieve the cached file.</param>
+        /// <param name="parameters">The EVE API parameters used to retrieve the cached file.</param>
+        private static CacheState IsFileCached(string apiPath, IDictionary<string, string> parameters)
         {
             return IsFileCached(GetCachePath(apiPath, parameters));
         }
 
-        private static bool IsFileCached(string filePath)
+        /// <summary>
+        /// Checks the state of the cache for a particular file.
+        /// </summary>
+        /// <param name="filePath">The filesystem path to the cached file.</param>
+        private static CacheState IsFileCached(string filePath)
         {
             // check whether it even exists
-            if (!File.Exists(filePath)) return false;
+            if (!File.Exists(filePath)) return CacheState.Uncached;
 
             // open and look for the cachedUntil element
             try
@@ -178,12 +197,12 @@ namespace HeavyDuck.Eve
                     cacheTime = DateTime.Parse(cacheNode.Value);
 
                     // now we can compare to the current time
-                    return TimeZone.CurrentTimeZone.ToUniversalTime(DateTime.Now) < cacheTime;
+                    return TimeZone.CurrentTimeZone.ToUniversalTime(DateTime.Now) < cacheTime ? CacheState.Cached : CacheState.CachedOutOfDate;
                 }
             }
             catch
             {
-                return false;
+                return CacheState.Uncached;
             }
         }
 
