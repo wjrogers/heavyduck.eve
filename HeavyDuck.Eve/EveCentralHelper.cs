@@ -72,13 +72,13 @@ namespace HeavyDuck.Eve
             return results;
         }
 
-        public static double GetItemAveragePrice(int typeID)
+        public static double GetItemMarketStat(int typeID, MarketStat stat)
         {
             string filePath = GetMarketFileName(typeID);
-            double price;
+            double value;
 
             // check whether the file is cached
-            if (IsFileCached(filePath)) return ParseAveragePrice(filePath);
+            if (IsFileCached(filePath)) return ParseMarketStat(filePath, stat);
 
             // create request
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(EVECENTRAL_MARKETSTAT_URL + typeID.ToString());
@@ -104,7 +104,7 @@ namespace HeavyDuck.Eve
                 }
 
                 // we will try to parse the file now
-                price = ParseAveragePrice(tempPath);
+                value = ParseMarketStat(tempPath, stat);
 
                 // if that worked, we assume everything is dandy and copy the file to the cache
                 File.Copy(tempPath, filePath, true);
@@ -120,7 +120,7 @@ namespace HeavyDuck.Eve
             }
 
             // return the results
-            return price;
+            return value;
         }
 
         private static Dictionary<string, double> ParseMineralFile(string path)
@@ -145,17 +145,63 @@ namespace HeavyDuck.Eve
             return prices;
         }
 
-        private static double ParseAveragePrice(string path)
+        private static double ParseMarketStat(string path, MarketStat stat)
         {
+            string localName;
+
+            // convert the MarketStat enumeration to an XML element name
+            switch (stat)
+            {
+                case MarketStat.AvgPrice:
+                    localName = "avg_price";
+                    break;
+                case MarketStat.TotalVolume:
+                    localName = "total_volume";
+                    break;
+                case MarketStat.AvgBuyPrice:
+                    localName = "avg_buy_price";
+                    break;
+                case MarketStat.TotalBuyVolume:
+                    localName = "total_buy_volume";
+                    break;
+                case MarketStat.StdDevBuyPrice:
+                    localName = "stddev_buy_price";
+                    break;
+                case MarketStat.MaxBuyPrice:
+                    localName = "max_buy_price";
+                    break;
+                case MarketStat.MinBuyPrice:
+                    localName = "min_buy_price";
+                    break;
+                case MarketStat.AvgSellPrice:
+                    localName = "avg_sell_price";
+                    break;
+                case MarketStat.TotalSellVolume:
+                    localName = "total_sell_volume";
+                    break;
+                case MarketStat.StdDevSellPrice:
+                    localName = "stddev_sell_price";
+                    break;
+                case MarketStat.MaxSellPrice:
+                    localName = "max_sell_price";
+                    break;
+                case MarketStat.MinSellPrice:
+                    localName = "min_sell_price";
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException("Unrecognized MarketStat " + stat.ToString());
+            }
+
+            // parse the requested value from the eve-central XML
             using (FileStream fs = File.Open(path, FileMode.Open, FileAccess.Read))
             {
                 XPathDocument doc = new XPathDocument(fs);
                 XPathNavigator nav = doc.CreateNavigator();
-                XPathNavigator node = nav.SelectSingleNode("/market_stat/avg_price");
+                XPathNavigator node = nav.SelectSingleNode("/market_stat/" + localName);
 
                 if (node == null)
                 {
-                    throw new ArgumentException("File '" + path + "' does not contain a /market_stat/avg_price node.");
+                    throw new ArgumentException(string.Format("File '{0}' does not contain a /market_stat/{1} node.", path, localName));
                 }
                 else
                 {
@@ -185,5 +231,23 @@ namespace HeavyDuck.Eve
         {
             return Path.Combine(m_cachePath, string.Format("marketstat_{0}.xml", typeID));
         }
+    }
+
+    public enum MarketStat
+    {
+        AvgPrice,
+        TotalVolume,
+
+        AvgBuyPrice,
+        TotalBuyVolume,
+        StdDevBuyPrice,
+        MaxBuyPrice,
+        MinBuyPrice,
+
+        AvgSellPrice,
+        TotalSellVolume,
+        StdDevSellPrice,
+        MaxSellPrice,
+        MinSellPrice,
     }
 }
