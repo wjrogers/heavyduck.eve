@@ -20,6 +20,14 @@ namespace HeavyDuck.Eve
         /// <param name="path">The path to the cached file.</param>
         /// <param name="updated">If the file was updated as a result of this request, true; otherwise, false.</param>
         /// <param name="state">The state of the cache for this file.</param>
+        public CachedResult(string path, bool updated, CacheState state) : this(path, updated, state, null) { }
+
+        /// <summary>
+        /// Creates a new instance of CachedResult.
+        /// </summary>
+        /// <param name="path">The path to the cached file.</param>
+        /// <param name="updated">If the file was updated as a result of this request, true; otherwise, false.</param>
+        /// <param name="state">The state of the cache for this file.</param>
         /// <param name="ex">The exception that prevented the file from being updated, if any.</param>
         public CachedResult(string path, bool updated, CacheState state, Exception ex)
         {
