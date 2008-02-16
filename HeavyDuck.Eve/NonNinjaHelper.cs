@@ -76,9 +76,9 @@ namespace HeavyDuck.Eve
             }
         }
 
-        public static Dictionary<long, NonNinjaMedians> ParseMediansTxt(string path)
+        public static Dictionary<int, NonNinjaMedians> ParseMediansTxt(string path)
         {
-            Dictionary<long, NonNinjaMedians> medians = new Dictionary<long, NonNinjaMedians>();
+            Dictionary<int, NonNinjaMedians> medians = new Dictionary<int, NonNinjaMedians>();
 
             // parse the file, this should be fairly straightforward
             using (FileStream stream = File.Open(path, FileMode.Open, FileAccess.Read))
@@ -87,7 +87,7 @@ namespace HeavyDuck.Eve
                 {
                     string[] fields;
                     string line;
-                    long typeID;
+                    int typeID;
                     float sellMedian, buyMedian;
                     int errors = 0;
 
@@ -105,7 +105,7 @@ namespace HeavyDuck.Eve
                         // parse numbers, add, etc.
                         try
                         {
-                            typeID = Convert.ToInt64(fields[0]);
+                            typeID = Convert.ToInt32(fields[0]);
                             sellMedian = Convert.ToSingle(fields[1]);
                             buyMedian = Convert.ToSingle(fields[2]);
 
