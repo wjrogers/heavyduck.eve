@@ -25,9 +25,10 @@ namespace HeavyDuck.Eve
         {
             Dictionary<string, double> results;
             string filePath = Path.Combine(m_cachePath, "minerals.xml");
+            CacheState currentState = Resources.IsFileCached(filePath, CACHE_HOURS);
 
             // check whether the file is already there
-            if (IsFileCached(filePath)) return ParseMineralFile(filePath);
+            if (currentState == CacheState.Cached) return ParseMineralFile(filePath);
 
             // create request
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(EVECENTRAL_MINERAL_URL);
@@ -58,6 +59,14 @@ namespace HeavyDuck.Eve
                 // if that worked, we assume everything is dandy and copy the file to the cache
                 File.Copy(tempPath, filePath, true);
             }
+            catch
+            {
+                // parse the existing out of date file
+                if (currentState != CacheState.Uncached)
+                    return ParseMineralFile(filePath);
+                else
+                    throw;
+            }
             finally
             {
                 // clean up
@@ -76,9 +85,10 @@ namespace HeavyDuck.Eve
         {
             string filePath = GetMarketFileName(typeID);
             double value;
+            CacheState currentState = Resources.IsFileCached(filePath, CACHE_HOURS);
 
             // check whether the file is cached
-            if (IsFileCached(filePath)) return ParseMarketStat(filePath, stat);
+            if (currentState == CacheState.Cached) return ParseMarketStat(filePath, stat);
 
             // create request
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(EVECENTRAL_MARKETSTAT_URL + typeID.ToString());
@@ -108,6 +118,14 @@ namespace HeavyDuck.Eve
 
                 // if that worked, we assume everything is dandy and copy the file to the cache
                 File.Copy(tempPath, filePath, true);
+            }
+            catch
+            {
+                // parse the existing out of date file
+                if (currentState != CacheState.Uncached)
+                    return ParseMarketStat(filePath, stat);
+                else
+                    throw;
             }
             finally
             {
@@ -209,21 +227,6 @@ namespace HeavyDuck.Eve
                     try { return node.ValueAsDouble; }
                     catch (FormatException) { return 0; }
                 }
-            }
-        }
-
-        private static bool IsFileCached(string path)
-        {
-            try
-            {
-                FileInfo info = new FileInfo(path);
-                TimeSpan age = DateTime.Now.Subtract(info.LastWriteTime);
-
-                return age.TotalHours < CACHE_HOURS;
-            }
-            catch
-            {
-                return false;
             }
         }
 
