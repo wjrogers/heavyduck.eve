@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Net;
+using System.IO.Compression;
 using System.Text;
 using System.Xml;
 using System.Xml.XPath;
@@ -10,7 +10,8 @@ namespace HeavyDuck.Eve
 {
     public class NonNinjaHelper
     {
-        private const string MEDIANS_TXT_URL = @"http://nonninja.net/eve/prices/medians.txt";
+        private const string MEDIANS_TXT_ALL_URL = @"http://nonninja.net/eve/prices/medians.txt.gz";
+        private const string MEDIANS_TXT_URL = @"http://nonninja.net/eve/prices/{0}.txt.gz";
         private const int CACHE_HOURS = 24;
 
         private static readonly string m_cachePath = Path.Combine(Resources.CacheRoot, "nonninja");
@@ -20,60 +21,36 @@ namespace HeavyDuck.Eve
             if (!Directory.Exists(m_cachePath)) Directory.CreateDirectory(m_cachePath);
         }
 
+        /// <summary>
+        /// Gets the median prices file for all regions.
+        /// </summary>
         public static CachedResult GetMediansTxt()
         {
-            string filePath = Path.Combine(m_cachePath, "medians.txt");
-            CacheState currentState = IsFileCached(filePath);
+            return GetMediansTxt(null);
+        }
 
-            // check whether the file is cached
-            if (currentState == CacheState.Cached) return new CachedResult(filePath, false, CacheState.Cached);
+        /// <summary>
+        /// Gets the median prices file for the specified region.
+        /// </summary>
+        /// <param name="regionID">The region ID, or null for all regions.</param>
+        public static CachedResult GetMediansTxt(int? regionID)
+        {
+            string url, cachePath;
 
-            // create request
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(MEDIANS_TXT_URL);
-
-            // set request properties
-            request.KeepAlive = false;
-            request.Method = "GET";
-            request.UserAgent = Resources.USER_AGENT;
-
-            // prep for response
-            WebResponse response = null;
-            string tempPath = null;
-
-            try
+            // set the url and filename based on regionID
+            if (regionID.HasValue)
             {
-                // do the actual net stuff
-                response = request.GetResponse();
-
-                // read and write to a temp file
-                using (Stream input = response.GetResponseStream())
-                {
-                    tempPath = Resources.DownloadStream(input);
-                }
-
-                // we assume the file is fine because there is really no easy way to test it
-                File.Copy(tempPath, filePath, true);
-
-                // return success
-                return new CachedResult(filePath, true, CacheState.Cached);
+                url = string.Format(MEDIANS_TXT_URL, regionID);
+                cachePath = Path.Combine(m_cachePath, regionID.ToString() + ".txt.gz");
             }
-            catch (Exception ex)
+            else
             {
-                // if we currently have a valid local copy of the file, even if out of date, return that info
-                if (currentState != CacheState.Uncached)
-                    return new CachedResult(filePath, false, currentState, ex);
-                else
-                    return new CachedResult(null, false, CacheState.Uncached, ex);
+                url = MEDIANS_TXT_ALL_URL;
+                cachePath = Path.Combine(m_cachePath, "medians.txt.gz");
             }
-            finally
-            {
-                // clean up
-                if (response != null) response.Close();
 
-                // get rid of the temp file if we can
-                try { if (!string.IsNullOrEmpty(tempPath)) File.Delete(tempPath); }
-                catch { /* pass */ }
-            }
+            // use the generic downloader
+            return Resources.CacheFile(url, cachePath, CACHE_HOURS);
         }
 
         public static Dictionary<int, NonNinjaMedians> ParseMediansTxt(string path)
@@ -83,38 +60,41 @@ namespace HeavyDuck.Eve
             // parse the file, this should be fairly straightforward
             using (FileStream stream = File.Open(path, FileMode.Open, FileAccess.Read))
             {
-                using (StreamReader reader = new StreamReader(stream))
+                using (GZipStream zip = new GZipStream(stream, CompressionMode.Decompress))
                 {
-                    string[] fields;
-                    string line;
-                    int typeID;
-                    float sellMedian, buyMedian;
-                    int errors = 0;
-
-                    // discard the column header line
-                    reader.ReadLine();
-
-                    // read stuff for real
-                    while (null != (line = reader.ReadLine()))
+                    using (StreamReader reader = new StreamReader(zip))
                     {
-                        fields = line.Split(',');
-                        
-                        // check that there are there numbers there at least
-                        if (fields.Length < 3) continue;
+                        string[] fields;
+                        string line;
+                        int typeID;
+                        float sellMedian, buyMedian;
+                        int errors = 0;
 
-                        // parse numbers, add, etc.
-                        try
-                        {
-                            typeID = Convert.ToInt32(fields[0]);
-                            sellMedian = Convert.ToSingle(fields[1]);
-                            buyMedian = Convert.ToSingle(fields[2]);
+                        // discard the column header line
+                        reader.ReadLine();
 
-                            medians[typeID] = new NonNinjaMedians(typeID, buyMedian, sellMedian);
-                        }
-                        catch (Exception ex)
+                        // read stuff for real
+                        while (null != (line = reader.ReadLine()))
                         {
-                            // tolerate 20 errors before we give it up
-                            if (++errors > 20) throw new ApplicationException("Unable to parse nonninja medians.txt file.", ex);
+                            fields = line.Split(',');
+
+                            // check that there are there numbers there at least
+                            if (fields.Length < 3) continue;
+
+                            // parse numbers, add, etc.
+                            try
+                            {
+                                typeID = Convert.ToInt32(fields[0]);
+                                sellMedian = Convert.ToSingle(fields[1]);
+                                buyMedian = Convert.ToSingle(fields[2]);
+
+                                medians[typeID] = new NonNinjaMedians(typeID, buyMedian, sellMedian);
+                            }
+                            catch (Exception ex)
+                            {
+                                // tolerate 20 errors before we give it up
+                                if (++errors > 20) throw new ApplicationException("Unable to parse nonninja medians.txt file.", ex);
+                            }
                         }
                     }
                 }
@@ -122,25 +102,6 @@ namespace HeavyDuck.Eve
 
             // return the numbahs
             return medians;
-        }
-
-        private static CacheState IsFileCached(string path)
-        {
-            try
-            {
-                FileInfo info = new FileInfo(path);
-
-                if (info.Exists && DateTime.Now.Subtract(info.LastWriteTime).TotalHours < CACHE_HOURS)
-                    return CacheState.Cached;
-                else if (info.Exists)
-                    return CacheState.CachedOutOfDate;
-                else
-                    return CacheState.Uncached;
-            }
-            catch
-            {
-                return CacheState.Uncached;
-            }
         }
     }
 
