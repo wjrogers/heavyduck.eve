@@ -109,7 +109,7 @@ namespace HeavyDuck.Eve
                 // write the request
                 using (Stream s = request.GetRequestStream())
                 {
-                    buffer = m_encoding.GetBytes(GetEncodedParameters(parameters));
+                    buffer = m_encoding.GetBytes(Resources.GetEncodedParameters(parameters));
                     s.Write(buffer, 0, buffer.Length);
                 }
 
@@ -219,7 +219,7 @@ namespace HeavyDuck.Eve
             mungedApiPath = mungedApiPath.Replace('/', '.');
 
             // get the parameters and hash them, then stick the hash in the filename
-            paramHash = BitConverter.ToString(Resources.MD5.ComputeHash(m_encoding.GetBytes(GetEncodedParameters(parameters)))).Replace("-", "");
+            paramHash = Resources.ComputeParameterHash(parameters);
             mungedApiPath = mungedApiPath.Insert(mungedApiPath.LastIndexOf('.'), "." + paramHash);
 
             // make sure the directory exists before returning this path
@@ -229,34 +229,6 @@ namespace HeavyDuck.Eve
                 Directory.CreateDirectory(dirPath);
 
             return cachePath;
-        }
-
-        private static string GetEncodedParameters(IDictionary<string, string> parameters)
-        {
-            StringBuilder list;
-            string[] keys;
-
-            // check the, uh, parameter
-            if (parameters == null) return "";
-
-            // copy the list of keys and sort them
-            keys = new string[parameters.Count];
-            parameters.Keys.CopyTo(keys, 0);
-            Array.Sort(keys);
-
-            // build the list
-            list = new StringBuilder();
-            foreach (string key in keys)
-            {
-                list.Append(System.Web.HttpUtility.UrlEncode(key));
-                list.Append("=");
-                list.Append(System.Web.HttpUtility.UrlEncode(parameters[key]));
-                list.Append("&");
-            }
-            if (list.Length > 0) list.Remove(list.Length - 1, 1);
-
-            // done
-            return list.ToString();
         }
     }
 }

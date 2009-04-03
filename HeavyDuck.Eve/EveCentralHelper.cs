@@ -10,19 +10,21 @@ namespace HeavyDuck.Eve
 {
     public class EveCentralHelper : IPriceProvider
     {
-        private const string EVECENTRAL_MARKETSTAT_URL = @"http://eve-central.com/home/marketstat_xml.html?regionlimit=10000002&typeid=";
-        private const string EVECENTRAL_MINERAL_URL = @"http://eve-central.com/home/marketstat_xml.html?evemon=1";
+        private const string EVECENTRAL_MARKETSTAT_URL = @"http://api.eve-central.com/api/marketstat";
+        private const string EVECENTRAL_MINERAL_URL = @"http://api.eve-central.com/api/evemon";
         private const int CACHE_HOURS = 24;
 
-        private static readonly EveCentralHelper m_instance = new EveCentralHelper();
         private static readonly string m_cachePath = Path.Combine(Resources.CacheRoot, "eve-central");
+        private static readonly UTF8Encoding m_encoding = new UTF8Encoding(false);
+
+        public static readonly EveCentralHelper Instance = new EveCentralHelper();
 
         private EveCentralHelper()
         {
             if (!Directory.Exists(m_cachePath)) Directory.CreateDirectory(m_cachePath);
         }
 
-        public Dictionary<string, float> GetMineralPrices()
+        public static Dictionary<string, float> GetMineralPrices()
         {
             Dictionary<string, float> results;
             string filePath = Path.Combine(m_cachePath, "minerals.xml");
@@ -82,79 +84,75 @@ namespace HeavyDuck.Eve
             return results;
         }
 
-        public float GetItemPrice(int typeID)
+        public static CachedResult GetMarketStat(IEnumerable<int> typeIDs, IEnumerable<int> regionLimits)
         {
-            return GetItemMarketStat(typeID, MarketStat.AvgPrice);
-        }
+            List<KeyValuePair<string, string>> parameters;
 
-        public Dictionary<int, float> GetItemPrices(IEnumerable<int> typeIDs)
-        {
-            Dictionary<int, float> result = new Dictionary<int, float>();
-
+            // build the list of parameters
+            parameters = new List<KeyValuePair<string, string>>();
             foreach (int typeID in typeIDs)
-                result[typeID] = GetItemMarketStat(typeID, MarketStat.AvgPrice);
+                parameters.Add(new KeyValuePair<string, string>("typeid", typeID.ToString()));
+            foreach (int regionID in regionLimits)
+                parameters.Add(new KeyValuePair<string, string>("regionlimit", regionID.ToString()));
 
-            return result;
+            // get the file
+            return Resources.CacheFilePost(EVECENTRAL_MARKETSTAT_URL, GetMarketStatPath(parameters), CACHE_HOURS, parameters);
         }
 
-        public float GetItemMarketStat(int typeID, MarketStat stat)
+        private static Dictionary<int, double> GetPriceHelper(IEnumerable<int> typeIDs, int? regionID, PriceStat stat)
         {
-            string filePath = GetMarketFileName(typeID);
-            float value;
-            CacheState currentState = Resources.IsFileCached(filePath, CACHE_HOURS);
-
-            // check whether the file is cached
-            if (currentState == CacheState.Cached) return ParseMarketStat(filePath, stat);
-
-            // create request
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(EVECENTRAL_MARKETSTAT_URL + typeID.ToString());
-
-            // set request properties
-            request.KeepAlive = false;
-            request.Method = "GET";
-            request.UserAgent = Resources.USER_AGENT;
-
-            // prep for response
-            WebResponse response = null;
-            string tempPath = null;
+            CachedResult result;
+            List<int> regionLimits;
+            Dictionary<int, MarketStat> parsed;
+            Dictionary<int, double> answer;
 
             try
             {
-                // do the actual net stuff
-                response = request.GetResponse();
+                // if regionID has a value, fill in our single region limit
+                regionLimits = new List<int>(1);
+                if (regionID.HasValue)
+                    regionLimits.Add(regionID.Value);
 
-                // read and write to a temp file
-                using (Stream input = response.GetResponseStream())
+                // fetch the data we want
+                result = GetMarketStat(typeIDs, regionLimits);
+
+                // check that we got something
+                if (result.State == CacheState.Uncached)
+                    throw new PriceProviderException(PriceProviderFailureReason.CacheEmpty, "Failed to retrieve EVE-Central data", result.Exception);
+
+                // parse it
+                parsed = ParseMarketStat(result.Path);
+
+                // convert to the form we want
+                answer = new Dictionary<int, double>(parsed.Count);
+                foreach (KeyValuePair<int, MarketStat> rawPair in parsed)
                 {
-                    tempPath = Resources.DownloadStream(input);
+                    double price;
+
+                    // read the requested value from the struct
+                    switch (stat)
+                    {
+                        case PriceStat.Mean:
+                            price = rawPair.Value.Avg;
+                            break;
+                        case PriceStat.Median:
+                            price = rawPair.Value.Median;
+                            break;
+                        default:
+                            throw new ArgumentException("Don't know how to process PriceStat " + stat);
+                    }
+
+                    // add the converted value
+                    answer[rawPair.Key] = price;
                 }
 
-                // we will try to parse the file now
-                value = ParseMarketStat(tempPath, stat);
-
-                // if that worked, we assume everything is dandy and copy the file to the cache
-                File.Copy(tempPath, filePath, true);
+                // return the answer
+                return answer;
             }
-            catch
+            catch (Exception ex)
             {
-                // parse the existing out of date file
-                if (currentState != CacheState.Uncached)
-                    return ParseMarketStat(filePath, stat);
-                else
-                    throw;
+                throw new PriceProviderException(PriceProviderFailureReason.UnexpectedError, "Unexpected error while querying EVE-Central prices", ex);
             }
-            finally
-            {
-                // clean up
-                if (response != null) response.Close();
-
-                // get rid of the temp file if we can
-                try { if (!string.IsNullOrEmpty(tempPath)) File.Delete(tempPath); }
-                catch { /* pass */ }
-            }
-
-            // return the results
-            return value;
         }
 
         private static Dictionary<string, float> ParseMineralFile(string path)
@@ -179,94 +177,105 @@ namespace HeavyDuck.Eve
             return prices;
         }
 
-        private static float ParseMarketStat(string path, MarketStat stat)
+        private static Dictionary<int, MarketStat> ParseMarketStat(string path)
         {
-            string localName;
-
-            // convert the MarketStat enumeration to an XML element name
-            switch (stat)
-            {
-                case MarketStat.AvgPrice:
-                    localName = "avg_price";
-                    break;
-                case MarketStat.TotalVolume:
-                    localName = "total_volume";
-                    break;
-                case MarketStat.AvgBuyPrice:
-                    localName = "avg_buy_price";
-                    break;
-                case MarketStat.TotalBuyVolume:
-                    localName = "total_buy_volume";
-                    break;
-                case MarketStat.StdDevBuyPrice:
-                    localName = "stddev_buy_price";
-                    break;
-                case MarketStat.MaxBuyPrice:
-                    localName = "max_buy_price";
-                    break;
-                case MarketStat.MinBuyPrice:
-                    localName = "min_buy_price";
-                    break;
-                case MarketStat.AvgSellPrice:
-                    localName = "avg_sell_price";
-                    break;
-                case MarketStat.TotalSellVolume:
-                    localName = "total_sell_volume";
-                    break;
-                case MarketStat.StdDevSellPrice:
-                    localName = "stddev_sell_price";
-                    break;
-                case MarketStat.MaxSellPrice:
-                    localName = "max_sell_price";
-                    break;
-                case MarketStat.MinSellPrice:
-                    localName = "min_sell_price";
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException("Unrecognized MarketStat " + stat.ToString());
-            }
+            Dictionary<int, MarketStat> results = new Dictionary<int, MarketStat>();
 
             // parse the requested value from the eve-central XML
             using (FileStream fs = File.Open(path, FileMode.Open, FileAccess.Read))
             {
                 XPathDocument doc = new XPathDocument(fs);
                 XPathNavigator nav = doc.CreateNavigator();
-                XPathNavigator node = nav.SelectSingleNode("/market_stat/" + localName);
+                XPathNodeIterator typeNodes = nav.Select("//marketstat/type");
+                MarketStat stat;
+                int typeID;
 
-                if (node == null)
+                while (typeNodes.MoveNext())
                 {
-                    throw new ArgumentException(string.Format("File '{0}' does not contain a /market_stat/{1} node.", path, localName));
-                }
-                else
-                {
-                    // if the node is there, but the value is "None" or some such, return 0 to indicate "this file is OK, but there is no price"
-                    try { return Convert.ToSingle(node.Value); }
-                    catch (FormatException) { return 0; }
+                    // read the data from this node
+                    try
+                    {
+                        typeID = typeNodes.Current.SelectSingleNode("@id").ValueAsInt;
+
+                        stat = new MarketStat();
+                        stat.Volume = typeNodes.Current.SelectSingleNode("volume").ValueAsLong;
+                        stat.Avg = typeNodes.Current.SelectSingleNode("avg").ValueAsDouble;
+                        stat.Max = typeNodes.Current.SelectSingleNode("max").ValueAsDouble;
+                        stat.Min = typeNodes.Current.SelectSingleNode("min").ValueAsDouble;
+                        stat.StdDev = typeNodes.Current.SelectSingleNode("stddev").ValueAsDouble;
+                        stat.Median = typeNodes.Current.SelectSingleNode("median").ValueAsDouble;
+
+                        results[typeID] = stat;
+                    }
+                    catch { /* pass on to the next one */ }
                 }
             }
+
+            return results;
         }
 
-        private static string GetMarketFileName(int typeID)
+        /// <summary>
+        /// Contains the data from an EVE-Central typeID query.
+        /// </summary>
+        private struct MarketStat
         {
-            return Path.Combine(m_cachePath, string.Format("marketstat_{0}.xml", typeID));
+            public long Volume;
+            public double Avg;
+            public double Max;
+            public double Min;
+            public double StdDev;
+            public double Median;
         }
-    }
 
-    public enum MarketStat
-    {
-        AvgPrice,
-        TotalVolume,
+        private static string GetMarketStatPath(IEnumerable<KeyValuePair<string, string>> parameters)
+        {
+            return Path.Combine(m_cachePath, string.Format("marketstat_{0}.xml", Resources.ComputeParameterHash(parameters)));
+        }
 
-        AvgBuyPrice,
-        TotalBuyVolume,
-        StdDevBuyPrice,
-        MaxBuyPrice,
-        MinBuyPrice,
+        #region IPriceProvider Members
 
-        AvgSellPrice,
-        TotalSellVolume,
-        StdDevSellPrice,
-        MaxSellPrice,
-        MinSellPrice,
+        public double GetPrice(int typeID, PriceStat stat)
+        {
+            Dictionary<int, double> answer = GetPriceHelper(new int[] { typeID }, null, stat);
+            double price;
+
+            if (answer.TryGetValue(typeID, out price))
+                return price;
+            else
+                throw new PriceProviderException(PriceProviderFailureReason.PriceMissing, "Answer did not contain the requested price");
+        }
+
+        public double GetPriceHighSec(int typeID, PriceStat stat)
+        {
+            throw new NotImplementedException();
+        }
+
+        public double GetPriceByRegion(int typeID, int regionID, PriceStat stat)
+        {
+            Dictionary<int, double> answer = GetPriceHelper(new int[] { typeID }, regionID, stat);
+            double price;
+
+            if (answer.TryGetValue(typeID, out price))
+                return price;
+            else
+                throw new PriceProviderException(PriceProviderFailureReason.PriceMissing, "Answer did not contain the requested price");
+        }
+
+        public Dictionary<int, double> GetPrices(IEnumerable<int> typeIDs, PriceStat stat)
+        {
+            return GetPriceHelper(typeIDs, null, stat);
+        }
+
+        public Dictionary<int, double> GetPricesHighSec(IEnumerable<int> typeIDs, PriceStat stat)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Dictionary<int, double> GetPricesByRegion(IEnumerable<int> typeIDs, int regionID, PriceStat stat)
+        {
+            return GetPriceHelper(typeIDs, regionID, stat);
+        }
+
+        #endregion
     }
 }
