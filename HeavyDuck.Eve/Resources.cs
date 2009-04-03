@@ -7,6 +7,8 @@ using System.Text;
 
 namespace HeavyDuck.Eve
 {
+    internal delegate void PostDownloadAction(string tempPath);
+
     internal static class Resources
     {
         public const string USER_AGENT = "HeavyDuck.Eve";
@@ -30,7 +32,25 @@ namespace HeavyDuck.Eve
             get { return m_encoding; }
         }
 
+        /// <summary>
+        /// Caches a file from the web using the GET method.
+        /// </summary>
+        /// <param name="url">The url to request.</param>
+        /// <param name="cachePath">The path where the cached file will be saved.</param>
+        /// <param name="cacheHours">The number of hours before the cache expires.</param>
         public static CachedResult CacheFile(string url, string cachePath, int cacheHours)
+        {
+            return CacheFile(url, cachePath, cacheHours, null);
+        }
+
+        /// <summary>
+        /// Caches a file from the web using the GET method.
+        /// </summary>
+        /// <param name="url">The url to request.</param>
+        /// <param name="cachePath">The path where the cached file will be saved.</param>
+        /// <param name="cacheHours">The number of hours before the cache expires.</param>
+        /// <param name="action">A validation or processing action to be run after downloading the file but before copying it to <paramref name="cachePath"/>.</param>
+        public static CachedResult CacheFile(string url, string cachePath, int cacheHours, PostDownloadAction action)
         {
             CacheState currentState = IsFileCached(cachePath, cacheHours);
 
@@ -60,7 +80,11 @@ namespace HeavyDuck.Eve
                     tempPath = DownloadStream(input);
                 }
 
-                // we assume the file is fine because there is really no easy way to test it
+                // call the PostDownloadAction if there is one
+                if (action != null)
+                    action(tempPath);
+
+                // we assume the file is fine if the PostDownloadAction didn't throw an exception
                 File.Copy(tempPath, cachePath, true);
 
                 // return success
@@ -85,7 +109,27 @@ namespace HeavyDuck.Eve
             }
         }
 
+        /// <summary>
+        /// Caches a file from the web using the POST method.
+        /// </summary>
+        /// <param name="url">The url to request.</param>
+        /// <param name="cachePath">The path where the cached file will be saved.</param>
+        /// <param name="cacheHours">The number of hours before the cache expires.</param>
+        /// <param name="parameters">The POST parameters.</param>
         public static CachedResult CacheFilePost(string url, string cachePath, int cacheHours, IEnumerable<KeyValuePair<string, string>> parameters)
+        {
+            return CacheFilePost(url, cachePath, cacheHours, parameters, null);
+        }
+
+        /// <summary>
+        /// Caches a file from the web using the POST method.
+        /// </summary>
+        /// <param name="url">The url to request.</param>
+        /// <param name="cachePath">The path where the cached file will be saved.</param>
+        /// <param name="cacheHours">The number of hours before the cache expires.</param>
+        /// <param name="parameters">The POST parameters.</param>
+        /// <param name="action">A validation or processing action to be run after downloading the file but before copying it to <paramref name="cachePath"/>.</param>
+        public static CachedResult CacheFilePost(string url, string cachePath, int cacheHours, IEnumerable<KeyValuePair<string, string>> parameters, PostDownloadAction action)
         {
             byte[] buffer;
             CacheState currentState = IsFileCached(cachePath, cacheHours);
@@ -124,8 +168,11 @@ namespace HeavyDuck.Eve
                     tempPath = Resources.DownloadStream(input);
                 }
 
+                // call the PostDownloadAction if there is one
+                if (action != null)
+                    action(tempPath);
 
-                // we assume the file is fine because there is really no easy way to test it
+                // we assume the file is fine if the PostDownloadAction didn't throw an exception
                 File.Copy(tempPath, cachePath, true);
 
                 // return success

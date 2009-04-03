@@ -26,61 +26,16 @@ namespace HeavyDuck.Eve
 
         public static Dictionary<string, float> GetMineralPrices()
         {
-            Dictionary<string, float> results;
+            Dictionary<string, float> results = null;
             string filePath = Path.Combine(m_cachePath, "minerals.xml");
-            CacheState currentState = Resources.IsFileCached(filePath, CACHE_HOURS);
 
-            // check whether the file is already there
-            if (currentState == CacheState.Cached) return ParseMineralFile(filePath);
-
-            // create request
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(EVECENTRAL_MINERAL_URL);
-
-            // set request properties
-            request.KeepAlive = false;
-            request.Method = "GET";
-            request.UserAgent = Resources.USER_AGENT;
-
-            // prep for response
-            WebResponse response = null;
-            string tempPath = null;
-
-            try
+            // download the file
+            Resources.CacheFile(EVECENTRAL_MINERAL_URL, Path.Combine(m_cachePath, "minerals.xml"), CACHE_HOURS, delegate(string tempPath)
             {
-                // do the actual net stuff
-                response = request.GetResponse();
-
-                // read and write to a temp file
-                using (Stream input = response.GetResponseStream())
-                {
-                    tempPath = Resources.DownloadStream(input);
-                }
-
                 // we will try to parse the file now
                 results = ParseMineralFile(tempPath);
+            });
 
-                // if that worked, we assume everything is dandy and copy the file to the cache
-                File.Copy(tempPath, filePath, true);
-            }
-            catch
-            {
-                // parse the existing out of date file
-                if (currentState != CacheState.Uncached)
-                    return ParseMineralFile(filePath);
-                else
-                    throw;
-            }
-            finally
-            {
-                // clean up
-                if (response != null) response.Close();
-
-                // get rid of the temp file if we can
-                try { if (!string.IsNullOrEmpty(tempPath)) File.Delete(tempPath); }
-                catch { /* pass */ }
-            }
-
-            // return the results
             return results;
         }
 

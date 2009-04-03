@@ -79,49 +79,20 @@ namespace HeavyDuck.Eve
 
         public static CachedResult QueryApi(string apiPath, IDictionary<string, string> parameters)
         {
-            byte[] buffer;
-            string cachePath = GetCachePath(apiPath, parameters);
+            string cachePath;
             CacheState currentState;
 
             // check parameters
             if (string.IsNullOrEmpty(apiPath)) throw new ArgumentNullException("apiPath");
 
-            // check whether the thing is already cached anyway
+            // for the API we have special logic to check whether the file is cached, so do this first
+            cachePath = GetCachePath(apiPath, parameters);
             currentState = IsFileCached(cachePath);
             if (currentState == CacheState.Cached) return new CachedResult(cachePath, false, currentState, null);
 
-            // create our request crap
-            Uri uri = new Uri(m_apiRoot, apiPath);
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(uri);
-
-            // set the standard request properties
-            request.ContentType = "application/x-www-form-urlencoded";
-            request.KeepAlive = false;
-            request.Method = "POST";
-            request.UserAgent = Resources.USER_AGENT;
-
-            // prep to handle response
-            WebResponse response = null;
-            string tempPath = null;
-
-            try
+            // query the API
+            return Resources.CacheFilePost(new Uri(m_apiRoot, apiPath).ToString(), cachePath, 0, parameters, delegate(string tempPath)
             {
-                // write the request
-                using (Stream s = request.GetRequestStream())
-                {
-                    buffer = m_encoding.GetBytes(Resources.GetEncodedParameters(parameters));
-                    s.Write(buffer, 0, buffer.Length);
-                }
-
-                // here we actually send the request and get a response (we hope)
-                response = request.GetResponse();
-
-                // read the response and write it to the temp file
-                using (Stream input = response.GetResponseStream())
-                {
-                    tempPath = Resources.DownloadStream(input);
-                }
-
                 // inspect the resulting file for errors
                 using (FileStream tempStream = File.Open(tempPath, FileMode.Open, FileAccess.Read))
                 {
@@ -137,30 +108,7 @@ namespace HeavyDuck.Eve
                     if (nav.SelectSingleNode("/eveapi") == null)
                         throw new EveApiException(0, "No valid eveapi XML found in response.");
                 }
-
-                // we now assume the file is valid and copy it to the cache path
-                File.Copy(tempPath, cachePath, true);
-
-                // return success
-                return new CachedResult(cachePath, true, CacheState.Cached, null);
-            }
-            catch (Exception ex)
-            {
-                // if we currently have a valid local copy of the file, even if out of date, return that info
-                if (currentState != CacheState.Uncached)
-                    return new CachedResult(cachePath, false, currentState, ex);
-                else
-                    return new CachedResult(null, false, CacheState.Uncached, ex);
-            }
-            finally
-            {
-                // close the response
-                if (response != null) response.Close();
-
-                // get rid of the temp file, don't care if it doesn't work
-                try { if (!string.IsNullOrEmpty(tempPath)) File.Delete(tempPath); }
-                catch { /* pass */ }
-            }
+            });
         }
 
         /// <summary>
