@@ -8,22 +8,23 @@ using System.Xml.XPath;
 
 namespace HeavyDuck.Eve
 {
-    public static class EveCentralHelper
+    public class EveCentralHelper : IPriceProvider
     {
         private const string EVECENTRAL_MARKETSTAT_URL = @"http://eve-central.com/home/marketstat_xml.html?regionlimit=10000002&typeid=";
         private const string EVECENTRAL_MINERAL_URL = @"http://eve-central.com/home/marketstat_xml.html?evemon=1";
         private const int CACHE_HOURS = 24;
 
+        private static readonly EveCentralHelper m_instance = new EveCentralHelper();
         private static readonly string m_cachePath = Path.Combine(Resources.CacheRoot, "eve-central");
 
-        static EveCentralHelper()
+        private EveCentralHelper()
         {
             if (!Directory.Exists(m_cachePath)) Directory.CreateDirectory(m_cachePath);
         }
 
-        public static Dictionary<string, double> GetMineralPrices()
+        public Dictionary<string, float> GetMineralPrices()
         {
-            Dictionary<string, double> results;
+            Dictionary<string, float> results;
             string filePath = Path.Combine(m_cachePath, "minerals.xml");
             CacheState currentState = Resources.IsFileCached(filePath, CACHE_HOURS);
 
@@ -81,10 +82,25 @@ namespace HeavyDuck.Eve
             return results;
         }
 
-        public static double GetItemMarketStat(int typeID, MarketStat stat)
+        public float GetItemPrice(int typeID)
+        {
+            return GetItemMarketStat(typeID, MarketStat.AvgPrice);
+        }
+
+        public Dictionary<int, float> GetItemPrices(IEnumerable<int> typeIDs)
+        {
+            Dictionary<int, float> result = new Dictionary<int, float>();
+
+            foreach (int typeID in typeIDs)
+                result[typeID] = GetItemMarketStat(typeID, MarketStat.AvgPrice);
+
+            return result;
+        }
+
+        public float GetItemMarketStat(int typeID, MarketStat stat)
         {
             string filePath = GetMarketFileName(typeID);
-            double value;
+            float value;
             CacheState currentState = Resources.IsFileCached(filePath, CACHE_HOURS);
 
             // check whether the file is cached
@@ -141,9 +157,9 @@ namespace HeavyDuck.Eve
             return value;
         }
 
-        private static Dictionary<string, double> ParseMineralFile(string path)
+        private static Dictionary<string, float> ParseMineralFile(string path)
         {
-            Dictionary<string, double> prices = new Dictionary<string,double>();
+            Dictionary<string, float> prices = new Dictionary<string, float>();
 
             using (FileStream fs = File.Open(path, FileMode.Open, FileAccess.Read))
             {
@@ -154,7 +170,7 @@ namespace HeavyDuck.Eve
                 while (iter.MoveNext())
                 {
                     string mineral = iter.Current.SelectSingleNode("name").Value;
-                    double price = iter.Current.SelectSingleNode("price").ValueAsDouble;
+                    float price = Convert.ToSingle(iter.Current.SelectSingleNode("price").Value);
 
                     prices[mineral] = price;
                 }
@@ -163,7 +179,7 @@ namespace HeavyDuck.Eve
             return prices;
         }
 
-        private static double ParseMarketStat(string path, MarketStat stat)
+        private static float ParseMarketStat(string path, MarketStat stat)
         {
             string localName;
 
@@ -224,7 +240,7 @@ namespace HeavyDuck.Eve
                 else
                 {
                     // if the node is there, but the value is "None" or some such, return 0 to indicate "this file is OK, but there is no price"
-                    try { return node.ValueAsDouble; }
+                    try { return Convert.ToSingle(node.Value); }
                     catch (FormatException) { return 0; }
                 }
             }

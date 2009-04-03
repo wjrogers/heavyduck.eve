@@ -2,7 +2,7 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProductVersion>9.0.21022</ProductVersion>
+    <ProductVersion>9.0.30729</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{9F84E4BB-4AC7-41D2-A90E-6A09C06E5C08}</ProjectGuid>
     <OutputType>Library</OutputType>
@@ -43,7 +43,7 @@
     <Compile Include="EveApiException.cs" />
     <Compile Include="EveApiHelper.cs" />
     <Compile Include="EveCentralHelper.cs" />
-    <Compile Include="NonNinjaHelper.cs" />
+    <Compile Include="IPriceProvider.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Resources.cs" />
   </ItemGroup>
