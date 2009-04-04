@@ -53,32 +53,15 @@ namespace HeavyDuck.Eve
         public static CachedResult CacheFile(string url, string cachePath, int cacheHours, PostDownloadAction action)
         {
             CacheState currentState = IsFileCached(cachePath, cacheHours);
+            string tempPath = null;
 
             // check whether the file is cached
             if (currentState == CacheState.Cached) return new CachedResult(cachePath, false, CacheState.Cached);
 
-            // create request
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
-
-            // set request properties
-            request.KeepAlive = false;
-            request.Method = "GET";
-            request.UserAgent = USER_AGENT;
-
-            // prep for response
-            WebResponse response = null;
-            string tempPath = null;
-
             try
             {
-                // do the actual net stuff
-                response = request.GetResponse();
-
-                // read and write to a temp file
-                using (Stream input = response.GetResponseStream())
-                {
-                    tempPath = DownloadStream(input);
-                }
+                // download to a temp file
+                tempPath = DownloadUrlGet(url);
 
                 // call the PostDownloadAction if there is one
                 if (action != null)
@@ -100,9 +83,6 @@ namespace HeavyDuck.Eve
             }
             finally
             {
-                // clean up
-                if (response != null) response.Close();
-
                 // get rid of the temp file if we can
                 try { if (!string.IsNullOrEmpty(tempPath)) File.Delete(tempPath); }
                 catch { /* pass */ }
@@ -131,43 +111,16 @@ namespace HeavyDuck.Eve
         /// <param name="action">A validation or processing action to be run after downloading the file but before copying it to <paramref name="cachePath"/>.</param>
         public static CachedResult CacheFilePost(string url, string cachePath, int cacheHours, IEnumerable<KeyValuePair<string, string>> parameters, PostDownloadAction action)
         {
-            byte[] buffer;
             CacheState currentState = IsFileCached(cachePath, cacheHours);
+            string tempPath = null;
 
             // check whether the file is cached
             if (currentState == CacheState.Cached) return new CachedResult(cachePath, false, CacheState.Cached);
 
-            // create our request crap
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
-
-            // set the standard request properties
-            request.ContentType = "application/x-www-form-urlencoded";
-            request.KeepAlive = false;
-            request.Method = "POST";
-            request.UserAgent = Resources.USER_AGENT;
-            request.ServicePoint.Expect100Continue = false; // fixes problems with POSTing to EVE-Central
-
-            // prep to handle response
-            WebResponse response = null;
-            string tempPath = null;
-
             try
             {
-                // write the request
-                using (Stream s = request.GetRequestStream())
-                {
-                    buffer = UTF8.GetBytes(Resources.GetEncodedParameters(parameters));
-                    s.Write(buffer, 0, buffer.Length);
-                }
-
-                // here we actually send the request and get a response (we hope)
-                response = request.GetResponse();
-
-                // read the response and write it to the temp file
-                using (Stream input = response.GetResponseStream())
-                {
-                    tempPath = Resources.DownloadStream(input);
-                }
+                // download to a temp file
+                tempPath = DownloadUrlPost(url, parameters);
 
                 // call the PostDownloadAction if there is one
                 if (action != null)
@@ -189,12 +142,89 @@ namespace HeavyDuck.Eve
             }
             finally
             {
-                // close the response
-                if (response != null) response.Close();
-
                 // get rid of the temp file, don't care if it doesn't work
                 try { if (!string.IsNullOrEmpty(tempPath)) File.Delete(tempPath); }
                 catch { /* pass */ }
+            }
+        }
+
+        /// <summary>
+        /// Downloads a file from the internets using the GET method and writes it to a temporary file.
+        /// </summary>
+        /// <param name="url">The url to request.</param>
+        /// <returns>The path to the temporary file.</returns>
+        public static string DownloadUrlGet(string url)
+        {
+            // create request
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
+
+            // set request properties
+            request.KeepAlive = false;
+            request.Method = "GET";
+            request.UserAgent = USER_AGENT;
+
+            // prep for response
+            WebResponse response = null;
+
+            try
+            {
+                // do the actual net stuff
+                response = request.GetResponse();
+
+                // read and write to a temp file
+                using (Stream input = response.GetResponseStream())
+                    return DownloadStream(input);
+            }
+            finally
+            {
+                // clean up
+                if (response != null) response.Close();
+            }
+        }
+
+        /// <summary>
+        /// Downloads a file from the internets using the POST method and writes it to a temporary file.
+        /// </summary>
+        /// <param name="url">The url to request.</param>
+        /// <param name="parameters">The form parameters.</param>
+        /// <returns>The path to the temporary file.</returns>
+        public static string DownloadUrlPost(string url, IEnumerable<KeyValuePair<string, string>> parameters)
+        {
+            byte[] buffer;
+
+            // create our request crap
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
+
+            // set the standard request properties
+            request.ContentType = "application/x-www-form-urlencoded";
+            request.KeepAlive = false;
+            request.Method = "POST";
+            request.UserAgent = Resources.USER_AGENT;
+            request.ServicePoint.Expect100Continue = false; // fixes problems with POSTing to EVE-Central
+
+            // prep to handle response
+            WebResponse response = null;
+
+            try
+            {
+                // write the request
+                using (Stream s = request.GetRequestStream())
+                {
+                    buffer = UTF8.GetBytes(Resources.GetEncodedParameters(parameters));
+                    s.Write(buffer, 0, buffer.Length);
+                }
+
+                // here we actually send the request and get a response (we hope)
+                response = request.GetResponse();
+
+                // read the response and write it to the temp file
+                using (Stream input = response.GetResponseStream())
+                    return Resources.DownloadStream(input);
+            }
+            finally
+            {
+                // close the response
+                if (response != null) response.Close();
             }
         }
 
