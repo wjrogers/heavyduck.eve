@@ -145,6 +145,7 @@ namespace HeavyDuck.Eve
             request.KeepAlive = false;
             request.Method = "POST";
             request.UserAgent = Resources.USER_AGENT;
+            request.ServicePoint.Expect100Continue = false; // fixes problems with POSTing to EVE-Central
 
             // prep to handle response
             WebResponse response = null;

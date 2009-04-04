@@ -13,6 +13,7 @@ namespace HeavyDuck.Eve
         private const string EVECENTRAL_MARKETSTAT_URL = @"http://api.eve-central.com/api/marketstat";
         private const string EVECENTRAL_MINERAL_URL = @"http://api.eve-central.com/api/evemon";
         private const int CACHE_HOURS = 24;
+        private const int MAX_TYPES_PER_QUERY = 100;
 
         private static readonly string m_cachePath = Path.Combine(Resources.CacheRoot, "eve-central");
         private static readonly UTF8Encoding m_encoding = new UTF8Encoding(false);
@@ -41,12 +42,17 @@ namespace HeavyDuck.Eve
 
         public static CachedResult GetMarketStat(IEnumerable<int> typeIDs, IEnumerable<int> regionLimits)
         {
-            List<KeyValuePair<string, string>> parameters;
+            List<KeyValuePair<string, string>> parameters = new List<KeyValuePair<string, string>>();
 
-            // build the list of parameters
-            parameters = new List<KeyValuePair<string, string>>();
+            // add all typeid parameters
             foreach (int typeID in typeIDs)
                 parameters.Add(new KeyValuePair<string, string>("typeid", typeID.ToString()));
+
+            // check whether we are within the service's limits
+            if (parameters.Count > MAX_TYPES_PER_QUERY)
+                throw new ArgumentException("The number of typeIDs per query may not exceed " + MAX_TYPES_PER_QUERY);
+
+            // add the regionlimit parameters
             foreach (int regionID in regionLimits)
                 parameters.Add(new KeyValuePair<string, string>("regionlimit", regionID.ToString()));
 
@@ -153,12 +159,12 @@ namespace HeavyDuck.Eve
                         typeID = typeNodes.Current.SelectSingleNode("@id").ValueAsInt;
 
                         stat = new MarketStat();
-                        stat.Volume = typeNodes.Current.SelectSingleNode("volume").ValueAsLong;
-                        stat.Avg = typeNodes.Current.SelectSingleNode("avg").ValueAsDouble;
-                        stat.Max = typeNodes.Current.SelectSingleNode("max").ValueAsDouble;
-                        stat.Min = typeNodes.Current.SelectSingleNode("min").ValueAsDouble;
-                        stat.StdDev = typeNodes.Current.SelectSingleNode("stddev").ValueAsDouble;
-                        stat.Median = typeNodes.Current.SelectSingleNode("median").ValueAsDouble;
+                        stat.Volume = typeNodes.Current.SelectSingleNode("all/volume").ValueAsLong;
+                        stat.Avg = typeNodes.Current.SelectSingleNode("all/avg").ValueAsDouble;
+                        stat.Max = typeNodes.Current.SelectSingleNode("all/max").ValueAsDouble;
+                        stat.Min = typeNodes.Current.SelectSingleNode("all/min").ValueAsDouble;
+                        stat.StdDev = typeNodes.Current.SelectSingleNode("all/stddev").ValueAsDouble;
+                        stat.Median = typeNodes.Current.SelectSingleNode("all/median").ValueAsDouble;
 
                         results[typeID] = stat;
                     }
