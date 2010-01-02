@@ -15,12 +15,12 @@ namespace HeavyDuck.Eve
         private const string EVECENTRAL_MARKETSTAT_URL = @"http://api.eve-central.com/api/marketstat";
         private const string EVECENTRAL_MINERAL_URL = @"http://api.eve-central.com/api/evemon";
         private const int MAX_TYPES_PER_QUERY = 100;
-        private const int CACHE_VERSION = 1;
+        private const int CACHE_VERSION = 2;
         private const int REGION_ALL = -1;
-        private const string REGION_ALL_NAME = "all";
 
         private static readonly Dictionary<int, Dictionary<int, MarketStat>> m_cache = new Dictionary<int, Dictionary<int, MarketStat>>();
         private static readonly string m_cachePath = Path.Combine(Resources.CacheRoot, "eve-central");
+        private static readonly string m_cacheFilePath = Path.Combine(m_cachePath, "cache");
         private static readonly string m_cacheVersionPath = Path.Combine(m_cachePath, "version");
         private static readonly TimeSpan m_cacheDuration = TimeSpan.FromHours(7.5);
         private static readonly TimeSpan m_rateLimit = TimeSpan.FromMilliseconds(500);
@@ -33,7 +33,7 @@ namespace HeavyDuck.Eve
 
         private EveCentralHelper()
         {
-            if (!Directory.Exists(m_cachePath)) Directory.CreateDirectory(m_cachePath);
+            // pass
         }
 
         private static bool TryGetCachedMarketStat(int typeID, int regionID, out MarketStat value)
@@ -230,7 +230,7 @@ namespace HeavyDuck.Eve
         /// Contains the data from an EVE-Central marketstat query.
         /// </summary>
         [Serializable]
-        private struct MarketStat
+        private class MarketStat
         {
             public DateTime TimeStamp;
             public MarketStatEntry All;
@@ -242,7 +242,7 @@ namespace HeavyDuck.Eve
         /// Contains one set of statistics from an EVE-Central marketstat query.
         /// </summary>
         [Serializable]
-        private struct MarketStatEntry
+        private class MarketStatEntry
         {
             public decimal Volume;
             public decimal Avg;
@@ -250,11 +250,6 @@ namespace HeavyDuck.Eve
             public decimal Min;
             public decimal StdDev;
             public decimal Median;
-        }
-
-        private static string GetMarketStatPath(int typeID)
-        {
-            return Path.Combine(m_cachePath, typeID.ToString());
         }
 
         #region IPriceProvider Members
@@ -272,62 +267,46 @@ namespace HeavyDuck.Eve
 
                 // if it doesn't match the current version, abort
                 if (version != CACHE_VERSION)
-                    return;
+                    throw new ApplicationException("Invalid EveCentralHelper cache version");
             }
             catch (Exception ex)
             {
-                // an error means the cache is invalid
+                // an error means the cache is invalid; try to delete it
                 System.Diagnostics.Debug.WriteLine(ex.ToString());
+                try { Directory.Delete(m_cachePath, true); }
+                catch { /* pass */ }
                 return;
             }
 
             lock (m_cache)
             {
-                foreach (string dir in Directory.GetDirectories(m_cachePath))
+                Dictionary<int, Dictionary<int, MarketStat>> cachedObject;
+
+                try
                 {
-                    Dictionary<int, MarketStat> regionCache;
-                    int regionID;
+                    // deserialize prices
+                    using (FileStream fs = File.OpenRead(m_cacheFilePath))
+                        cachedObject = (Dictionary<int, Dictionary<int, MarketStat>>)formatter.Deserialize(fs);
 
-                    // get the region ID from the directory name
-                    try
+                    // merge them with our existing readonly cache
+                    foreach (KeyValuePair<int, Dictionary<int, MarketStat>> entry in cachedObject)
                     {
-                        if (Path.GetFileName(dir) == REGION_ALL_NAME)
-                            regionID = REGION_ALL;
-                        else
-                            regionID = int.Parse(dir);
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine(ex.ToString());
-                        continue;
-                    }
+                        Dictionary<int, MarketStat> regionCache;
 
-                    // find or create the region cache
-                    if (!m_cache.TryGetValue(regionID, out regionCache))
-                    {
-                        regionCache = new Dictionary<int, MarketStat>();
-                        m_cache[regionID] = regionCache;
-                    }
-
-                    // read the values for this region
-                    foreach (string file in Directory.GetFiles(dir))
-                    {
-                        // deserialize prices
-                        try
+                        // create or fetch region dictionary
+                        if (!m_cache.TryGetValue(entry.Key, out regionCache))
                         {
-                            int typeID = int.Parse(Path.GetFileName(file));
-                            MarketStat marketStat;
-
-                            using (FileStream fs = File.OpenRead(file))
-                                marketStat = (MarketStat)formatter.Deserialize(fs);
-
-                            regionCache[typeID] = marketStat;
+                            regionCache = new Dictionary<int, MarketStat>();
+                            m_cache[entry.Key] = regionCache;
                         }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine(ex.ToString());
-                        }
+
+                        foreach (KeyValuePair<int, MarketStat> regionEntry in entry.Value)
+                            regionCache[regionEntry.Key] = regionEntry.Value;
                     }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(ex.ToString());
                 }
             }
         }
@@ -338,33 +317,18 @@ namespace HeavyDuck.Eve
 
             try
             {
+                // make sure cache path exists
+                Directory.CreateDirectory(m_cachePath);
+
                 // mark the cache version
                 using (StreamWriter w = new StreamWriter(File.OpenWrite(m_cacheVersionPath), m_encoding))
                     w.Write(CACHE_VERSION);
 
                 lock (m_cache)
                 {
-                    foreach (int regionID in m_cache.Keys)
-                    {
-                        string regionPath;
-                        
-                        // create path to region cache
-                        if (regionID == REGION_ALL)
-                            regionPath = Path.Combine(m_cachePath, REGION_ALL_NAME);
-                        else
-                            regionPath = Path.Combine(m_cachePath, regionID.ToString());
-
-                        // create region directory if necessary
-                        if (!Directory.Exists(regionPath))
-                            Directory.CreateDirectory(regionPath);
-
-                        // serialize prices
-                        foreach (KeyValuePair<int, MarketStat> entry in m_cache[regionID])
-                        {
-                            using (FileStream fs = File.OpenWrite(Path.Combine(regionPath, entry.Key.ToString())))
-                                formatter.Serialize(fs, entry.Value);
-                        }
-                    }
+                    // serialize prices
+                    using (FileStream fs = File.OpenWrite(m_cacheFilePath))
+                        formatter.Serialize(fs, m_cache);
                 }
             }
             catch
