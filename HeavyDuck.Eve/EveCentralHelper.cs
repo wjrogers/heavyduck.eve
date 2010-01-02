@@ -22,8 +22,8 @@ namespace HeavyDuck.Eve
         private static readonly string m_cachePath = Path.Combine(Resources.CacheRoot, "eve-central");
         private static readonly string m_cacheFilePath = Path.Combine(m_cachePath, "cache");
         private static readonly string m_cacheVersionPath = Path.Combine(m_cachePath, "version");
-        private static readonly TimeSpan m_cacheDuration = TimeSpan.FromHours(7.5);
-        private static readonly TimeSpan m_rateLimit = TimeSpan.FromMilliseconds(500);
+        private static readonly TimeSpan m_cacheDuration = TimeSpan.FromHours(23);
+        private static readonly TimeSpan m_rateLimit = TimeSpan.FromMilliseconds(100);
         private static readonly object m_rateLock = new object();
         private static readonly UTF8Encoding m_encoding = new UTF8Encoding(false);
 
