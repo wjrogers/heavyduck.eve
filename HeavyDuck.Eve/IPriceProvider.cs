@@ -9,18 +9,28 @@ namespace HeavyDuck.Eve
     public interface IPriceProvider
     {
         /// <summary>
+        /// Loads the provider's cache from disk.
+        /// </summary>
+        void LoadCache();
+
+        /// <summary>
+        /// Saves the provider's cache to disk.
+        /// </summary>
+        void SaveCache();
+
+        /// <summary>
         /// Gets the average price of an item in all regions.
         /// </summary>
         /// <param name="typeID">The type ID of the item.</param>
         /// <param name="stat">Which statistic to use for the price.</param>
-        double GetPrice(int typeID, PriceStat stat);
+        decimal GetPrice(int typeID, PriceStat stat);
 
         /// <summary>
         /// Gets the average price of an item in all connected high-sec systems.
         /// </summary>
         /// <param name="typeID">The type ID of the item.</param>
         /// <param name="stat">Which statistic to use for the price.</param>
-        double GetPriceHighSec(int typeID, PriceStat stat);
+        decimal GetPriceHighSec(int typeID, PriceStat stat);
 
         /// <summary>
         /// Gets the price of an item in a particular region.
@@ -28,7 +38,7 @@ namespace HeavyDuck.Eve
         /// <param name="typeID">The type ID of the item.</param>
         /// <param name="regionID">The ID of the region.</param>
         /// <param name="stat">Which statistic to use for the price.</param>
-        double GetPriceByRegion(int typeID, int regionID, PriceStat stat);
+        decimal GetPriceByRegion(int typeID, int regionID, PriceStat stat);
 
         /// <summary>
         /// Gets the average price of a list of items in all regions.
@@ -36,7 +46,7 @@ namespace HeavyDuck.Eve
         /// <param name="typeIDs">The list of typeIDs.</param>
         /// <param name="stat">Which statistic to use for the price.</param>
         /// <returns>A dictionary mapping typeIDs to prices.</returns>
-        Dictionary<int, double> GetPrices(IEnumerable<int> typeIDs, PriceStat stat);
+        Dictionary<int, decimal> GetPrices(IEnumerable<int> typeIDs, PriceStat stat);
 
         /// <summary>
         /// Gets the average price of a list of items in all connected high-sec systems.
@@ -44,7 +54,7 @@ namespace HeavyDuck.Eve
         /// <param name="typeIDs">The list of typeIDs.</param>
         /// <param name="stat">Which statistic to use for the price.</param>
         /// <returns>A dictionary mapping typeIDs to prices.</returns>
-        Dictionary<int, double> GetPricesHighSec(IEnumerable<int> typeIDs, PriceStat stat);
+        Dictionary<int, decimal> GetPricesHighSec(IEnumerable<int> typeIDs, PriceStat stat);
 
         /// <summary>
         /// Gets the average price of a list of items in a particular region.
@@ -53,7 +63,7 @@ namespace HeavyDuck.Eve
         /// <param name="regionID">The ID of the region.</param>
         /// <param name="stat">Which statistic to use for the price.</param>
         /// <returns>A dictionary mapping typeIDs to prices.</returns>
-        Dictionary<int, double> GetPricesByRegion(IEnumerable<int> typeIDs, int regionID, PriceStat stat);
+        Dictionary<int, decimal> GetPricesByRegion(IEnumerable<int> typeIDs, int regionID, PriceStat stat);
     }
 
     public enum PriceStat
