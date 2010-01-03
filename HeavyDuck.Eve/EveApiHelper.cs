@@ -11,9 +11,17 @@ namespace HeavyDuck.Eve
 {
     public static class EveApiHelper
     {
-        private static readonly Uri m_apiRoot = new Uri(@"http://api.eve-online.com/");
         private static readonly Regex m_regexAspx = new Regex(@"\.aspx$");
         private static readonly UTF8Encoding m_encoding = new UTF8Encoding(false);
+
+        public static readonly Uri DefaultApiRoot = new Uri(@"http://api.eve-online.com/");
+        private static Uri m_apiRoot = DefaultApiRoot;
+
+        public static Uri ApiRoot
+        {
+            get { return m_apiRoot; }
+            set { m_apiRoot = value; }
+        }
 
         public static CachedResult GetCharacters(int userID, string apiKey)
         {
