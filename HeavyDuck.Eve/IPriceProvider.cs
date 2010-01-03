@@ -9,6 +9,11 @@ namespace HeavyDuck.Eve
     public interface IPriceProvider
     {
         /// <summary>
+        /// Handle this event for progress feedback during long queries.
+        /// </summary>
+        event EventHandler<ProgressEventArgs> UpdateProgress;
+
+        /// <summary>
         /// Loads the provider's cache from disk.
         /// </summary>
         void LoadCache();
@@ -64,6 +69,18 @@ namespace HeavyDuck.Eve
         /// <param name="stat">Which statistic to use for the price.</param>
         /// <returns>A dictionary mapping typeIDs to prices.</returns>
         Dictionary<int, decimal> GetPricesByRegion(IEnumerable<int> typeIDs, int regionID, PriceStat stat);
+    }
+
+    public class ProgressEventArgs : EventArgs
+    {
+        public int Progress { get; private set; }
+        public int Max { get; private set; }
+
+        public ProgressEventArgs(int progress, int max)
+        {
+            this.Progress = progress;
+            this.Max = max;
+        }
     }
 
     public enum PriceStat

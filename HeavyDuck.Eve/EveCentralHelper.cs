@@ -74,7 +74,15 @@ namespace HeavyDuck.Eve
             }
         }
 
-        private static Dictionary<int, decimal> GetPriceHelper(IEnumerable<int> typeIDs, int regionID, PriceStat stat)
+        private void OnUpdateProgress(int progress, int max)
+        {
+            EventHandler<ProgressEventArgs> handler = this.UpdateProgress;
+
+            if (handler != null)
+                handler(this, new ProgressEventArgs(progress, max));
+        }
+
+        private Dictionary<int, decimal> GetPriceHelper(IEnumerable<int> typeIDs, int regionID, PriceStat stat)
         {
             Dictionary<int, MarketStat> parsed;
             Dictionary<int, MarketStat> cached = new Dictionary<int, MarketStat>();
@@ -99,6 +107,9 @@ namespace HeavyDuck.Eve
                 // EVE Central allows us only 100 types per request
                 for (int i = 0; i * MAX_TYPES_PER_QUERY < uncachedTypeIDs.Count; ++i)
                 {
+                    // progress feedback
+                    OnUpdateProgress(i * MAX_TYPES_PER_QUERY, uncachedTypeIDs.Count);
+
                     // rate limit queries
                     lock (m_rateLock)
                     {
@@ -144,6 +155,9 @@ namespace HeavyDuck.Eve
                         cached[entry.Key] = entry.Value;
                     }
                 }
+
+                // progress update the last
+                OnUpdateProgress(uncachedTypeIDs.Count, uncachedTypeIDs.Count);
 
                 // convert output to the form we want
                 answer = new Dictionary<int, decimal>(cached.Count);
@@ -258,6 +272,8 @@ namespace HeavyDuck.Eve
         }
 
         #region IPriceProvider Members
+
+        public event EventHandler<ProgressEventArgs> UpdateProgress;
 
         public void LoadCache()
         {
