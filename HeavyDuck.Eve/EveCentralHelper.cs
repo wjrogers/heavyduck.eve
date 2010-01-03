@@ -28,6 +28,7 @@ namespace HeavyDuck.Eve
         private static readonly UTF8Encoding m_encoding = new UTF8Encoding(false);
 
         private static DateTime m_lastQuery = DateTime.MinValue;
+        private static bool m_cacheDirty = false;
 
         public static readonly EveCentralHelper Instance = new EveCentralHelper();
 
@@ -69,6 +70,7 @@ namespace HeavyDuck.Eve
 
                 // store the value
                 regionCache[typeID] = value;
+                m_cacheDirty = true;
             }
         }
 
@@ -117,11 +119,23 @@ namespace HeavyDuck.Eve
                     if (regionID != REGION_ALL)
                         parameters.Add(new KeyValuePair<string, string>("regionlimit", regionID.ToString()));
 
-                    // fetch the data we want
-                    resultPath = Resources.DownloadUrlPost(EVECENTRAL_MARKETSTAT_URL, parameters);
+                    try
+                    {
+                        // fetch the data we want
+                        resultPath = Resources.DownloadUrlPost(EVECENTRAL_MARKETSTAT_URL, parameters);
 
-                    // parse it
-                    parsed = ParseMarketStat(resultPath);
+                        // parse it
+                        parsed = ParseMarketStat(resultPath);
+                    }
+                    finally
+                    {
+                        // clean up temp file
+                        if (resultPath != null)
+                        {
+                            try { File.Delete(resultPath); }
+                            catch { /* pass */ }
+                        }
+                    }
 
                     // cache the new stuff and copy to the cached dictionary for output below
                     foreach (KeyValuePair<int, MarketStat> entry in parsed)
@@ -160,15 +174,6 @@ namespace HeavyDuck.Eve
             catch (Exception ex)
             {
                 throw new PriceProviderException(PriceProviderFailureReason.UnexpectedError, "Unexpected error while querying EVE-Central prices", ex);
-            }
-            finally
-            {
-                // clean up temp file
-                if (resultPath != null)
-                {
-                    try { File.Delete(resultPath); }
-                    catch { /* pass */}
-                }
             }
         }
 
@@ -315,6 +320,9 @@ namespace HeavyDuck.Eve
         {
             BinaryFormatter formatter = new BinaryFormatter();
 
+            // sanity check
+            lock (m_cache) if (!m_cacheDirty) return;
+
             try
             {
                 // make sure cache path exists
@@ -329,6 +337,9 @@ namespace HeavyDuck.Eve
                     // serialize prices
                     using (FileStream fs = File.OpenWrite(m_cacheFilePath))
                         formatter.Serialize(fs, m_cache);
+
+                    // not dirty!
+                    m_cacheDirty = false;
                 }
             }
             catch
@@ -373,7 +384,16 @@ namespace HeavyDuck.Eve
 
         public Dictionary<int, decimal> GetPricesByRegion(IEnumerable<int> typeIDs, int regionID, PriceStat stat)
         {
-            return GetPriceHelper(typeIDs, regionID, stat);
+            Dictionary<int, decimal> result;
+
+            // do the query
+            result = GetPriceHelper(typeIDs, regionID, stat);
+
+            // save the cache sooner rather than later, just in case!
+            SaveCache();
+
+            // return it
+            return result;
         }
 
         #endregion
