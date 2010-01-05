@@ -86,7 +86,9 @@ namespace HeavyDuck.Eve
     public enum PriceStat
     {
         Mean,
-        Median
+        Median,
+        High,
+        Low
     }
 
     /// <summary>
@@ -119,5 +121,11 @@ namespace HeavyDuck.Eve
         PriceMissing,
         CacheEmpty,
         UnexpectedError
+    }
+
+    public static class PriceRegion
+    {
+        public const int ALL = -1;
+        public const int CHS = -2;
     }
 }

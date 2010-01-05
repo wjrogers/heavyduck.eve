@@ -16,7 +16,6 @@ namespace HeavyDuck.Eve
         private const string EVECENTRAL_MINERAL_URL = @"http://api.eve-central.com/api/evemon";
         private const int MAX_TYPES_PER_QUERY = 100;
         private const int CACHE_VERSION = 2;
-        private const int REGION_ALL = -1;
 
         private static readonly Dictionary<int, Dictionary<int, MarketStat>> m_cache = new Dictionary<int, Dictionary<int, MarketStat>>();
         private static readonly string m_cachePath = Path.Combine(Resources.CacheRoot, "eve-central");
@@ -127,7 +126,7 @@ namespace HeavyDuck.Eve
                         parameters.Add(new KeyValuePair<string, string>("typeid", uncachedTypeIDs[j].ToString()));
 
                     // if regionID has a value, fill in our single region limit
-                    if (regionID != REGION_ALL)
+                    if (regionID > 0)
                         parameters.Add(new KeyValuePair<string, string>("regionlimit", regionID.ToString()));
 
                     try
@@ -173,6 +172,12 @@ namespace HeavyDuck.Eve
                             break;
                         case PriceStat.Median:
                             price = entry.Value.All.Median;
+                            break;
+                        case PriceStat.High:
+                            price = entry.Value.All.Max;
+                            break;
+                        case PriceStat.Low:
+                            price = entry.Value.All.Min;
                             break;
                         default:
                             throw new ArgumentException("Don't know how to process PriceStat " + stat);
@@ -369,7 +374,7 @@ namespace HeavyDuck.Eve
 
         public decimal GetPrice(int typeID, PriceStat stat)
         {
-            return GetPriceByRegion(typeID, REGION_ALL, stat);
+            return GetPriceByRegion(typeID, PriceRegion.ALL, stat);
         }
 
         public decimal GetPriceHighSec(int typeID, PriceStat stat)
@@ -390,7 +395,7 @@ namespace HeavyDuck.Eve
 
         public Dictionary<int, decimal> GetPrices(IEnumerable<int> typeIDs, PriceStat stat)
         {
-            return GetPricesByRegion(typeIDs, REGION_ALL, stat);
+            return GetPricesByRegion(typeIDs, PriceRegion.ALL, stat);
         }
 
         public Dictionary<int, decimal> GetPricesHighSec(IEnumerable<int> typeIDs, PriceStat stat)
