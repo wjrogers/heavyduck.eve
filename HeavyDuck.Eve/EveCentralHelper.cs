@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Runtime.Serialization.Formatters.Binary;
@@ -240,12 +241,12 @@ namespace HeavyDuck.Eve
             MarketStatEntry entry;
 
             entry = new MarketStatEntry();
-            entry.Volume = Convert.ToDecimal(root.SelectSingleNode("volume").Value);
-            entry.Avg = Convert.ToDecimal(root.SelectSingleNode("avg").Value);
-            entry.Max = Convert.ToDecimal(root.SelectSingleNode("max").Value);
-            entry.Min = Convert.ToDecimal(root.SelectSingleNode("min").Value);
-            entry.StdDev = Convert.ToDecimal(root.SelectSingleNode("stddev").Value);
-            entry.Median = Convert.ToDecimal(root.SelectSingleNode("median").Value);
+            entry.Volume = Convert.ToInt64(root.SelectSingleNode("volume").Value, CultureInfo.InvariantCulture);
+            entry.Avg = Convert.ToDecimal(root.SelectSingleNode("avg").Value, CultureInfo.InvariantCulture);
+            entry.Max = Convert.ToDecimal(root.SelectSingleNode("max").Value, CultureInfo.InvariantCulture);
+            entry.Min = Convert.ToDecimal(root.SelectSingleNode("min").Value, CultureInfo.InvariantCulture);
+            entry.StdDev = Convert.ToDecimal(root.SelectSingleNode("stddev").Value, CultureInfo.InvariantCulture);
+            entry.Median = Convert.ToDecimal(root.SelectSingleNode("median").Value, CultureInfo.InvariantCulture);
 
             return entry;
         }
@@ -268,7 +269,7 @@ namespace HeavyDuck.Eve
         [Serializable]
         private class MarketStatEntry
         {
-            public decimal Volume;
+            public long Volume;
             public decimal Avg;
             public decimal Max;
             public decimal Min;
