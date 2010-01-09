@@ -101,7 +101,7 @@ namespace HeavyDuck.Eve
                     m_cache[regionID] = ParseFile(temp);
 
                 // copy file
-                File.Copy(temp, path);
+                File.Copy(temp, path, true);
             }
             finally
             {
