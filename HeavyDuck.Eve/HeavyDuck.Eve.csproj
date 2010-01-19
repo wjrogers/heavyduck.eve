@@ -39,7 +39,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="CachedResult.cs" />
+    <Compile Include="CacheResult.cs" />
     <Compile Include="EveApiException.cs" />
     <Compile Include="EveApiHelper.cs" />
     <Compile Include="EveCentralHelper.cs" />

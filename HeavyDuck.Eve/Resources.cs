@@ -38,7 +38,7 @@ namespace HeavyDuck.Eve
         /// <param name="url">The url to request.</param>
         /// <param name="cachePath">The path where the cached file will be saved.</param>
         /// <param name="ttl">The amount of time before the cache expires.</param>
-        public static CachedResult CacheFile(string url, string cachePath, TimeSpan ttl)
+        public static CacheResult CacheFile(string url, string cachePath, TimeSpan ttl)
         {
             return CacheFile(url, cachePath, ttl, null);
         }
@@ -50,9 +50,9 @@ namespace HeavyDuck.Eve
         /// <param name="cachePath">The path where the cached file will be saved.</param>
         /// <param name="ttl">The amount of time before the cache expires.</param>
         /// <param name="action">A validation or processing action to be run after downloading the file but before copying it to <paramref name="cachePath"/>.</param>
-        public static CachedResult CacheFile(string url, string cachePath, TimeSpan ttl, PostDownloadAction action)
+        public static CacheResult CacheFile(string url, string cachePath, TimeSpan ttl, PostDownloadAction action)
         {
-            CachedResult currentResult = IsFileCached(cachePath, ttl);
+            CacheResult currentResult = IsFileCached(cachePath, ttl);
             string tempPath = null;
 
             // check whether the file is cached
@@ -72,15 +72,15 @@ namespace HeavyDuck.Eve
                 File.Copy(tempPath, cachePath, true);
 
                 // return success
-                return new CachedResult(cachePath, true, CacheState.Cached, File.GetLastWriteTime(cachePath).Add(ttl));
+                return new CacheResult(cachePath, true, CacheState.Cached, File.GetLastWriteTime(cachePath).Add(ttl));
             }
             catch (Exception ex)
             {
                 // if we currently have a valid local copy of the file, even if out of date, return that info
                 if (currentResult.State != CacheState.Uncached)
-                    return CachedResult.FromExisting(currentResult, ex);
+                    return CacheResult.FromExisting(currentResult, ex);
                 else
-                    return CachedResult.Uncached(ex);
+                    return CacheResult.Uncached(ex);
             }
             finally
             {
@@ -97,7 +97,7 @@ namespace HeavyDuck.Eve
         /// <param name="cachePath">The path where the cached file will be saved.</param>
         /// <param name="ttl">The amount of time before the cache expires.</param>
         /// <param name="parameters">The POST parameters.</param>
-        public static CachedResult CacheFilePost(string url, string cachePath, TimeSpan ttl, IEnumerable<KeyValuePair<string, string>> parameters)
+        public static CacheResult CacheFilePost(string url, string cachePath, TimeSpan ttl, IEnumerable<KeyValuePair<string, string>> parameters)
         {
             return CacheFilePost(url, cachePath, ttl, parameters, null);
         }
@@ -110,9 +110,9 @@ namespace HeavyDuck.Eve
         /// <param name="ttl">The amount of time before the cache expires.</param>
         /// <param name="parameters">The POST parameters.</param>
         /// <param name="action">A validation or processing action to be run after downloading the file but before copying it to <paramref name="cachePath"/>.</param>
-        public static CachedResult CacheFilePost(string url, string cachePath, TimeSpan ttl, IEnumerable<KeyValuePair<string, string>> parameters, PostDownloadAction action)
+        public static CacheResult CacheFilePost(string url, string cachePath, TimeSpan ttl, IEnumerable<KeyValuePair<string, string>> parameters, PostDownloadAction action)
         {
-            CachedResult currentResult = IsFileCached(cachePath, ttl);
+            CacheResult currentResult = IsFileCached(cachePath, ttl);
             string tempPath = null;
 
             // check whether the file is cached
@@ -132,15 +132,15 @@ namespace HeavyDuck.Eve
                 File.Copy(tempPath, cachePath, true);
 
                 // return success
-                return new CachedResult(cachePath, true, CacheState.Cached, File.GetLastWriteTime(cachePath).Add(ttl));
+                return new CacheResult(cachePath, true, CacheState.Cached, File.GetLastWriteTime(cachePath).Add(ttl));
             }
             catch (Exception ex)
             {
                 // if we currently have a valid local copy of the file, even if out of date, return that info
                 if (currentResult.State != CacheState.Uncached)
-                    return CachedResult.FromExisting(currentResult, ex);
+                    return CacheResult.FromExisting(currentResult, ex);
                 else
-                    return CachedResult.Uncached(ex);
+                    return CacheResult.Uncached(ex);
             }
             finally
             {
@@ -270,7 +270,7 @@ namespace HeavyDuck.Eve
         /// </summary>
         /// <param name="path">The path to the cached file.</param>
         /// <param name="ttl">The amount of time before the file is considered out of date.</param>
-        public static CachedResult IsFileCached(string path, TimeSpan ttl)
+        public static CacheResult IsFileCached(string path, TimeSpan ttl)
         {
             try
             {
@@ -282,18 +282,18 @@ namespace HeavyDuck.Eve
                     cachedUntil = info.LastWriteTime.Add(ttl);
 
                     if (DateTime.Now < cachedUntil)
-                        return new CachedResult(path, false, CacheState.Cached, cachedUntil);
+                        return new CacheResult(path, false, CacheState.Cached, cachedUntil);
                     else
-                        return new CachedResult(path, false, CacheState.CachedOutOfDate, cachedUntil);
+                        return new CacheResult(path, false, CacheState.CachedOutOfDate, cachedUntil);
                 }
                 else
                 {
-                    return CachedResult.Uncached(path);
+                    return CacheResult.Uncached(path);
                 }
             }
             catch (Exception ex)
             {
-                return CachedResult.Uncached(path, ex);
+                return CacheResult.Uncached(path, ex);
             }
         }
 

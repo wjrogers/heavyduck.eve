@@ -24,27 +24,27 @@ namespace HeavyDuck.Eve
             set { m_apiRoot = value; }
         }
 
-        public static CachedResult GetCharacters(int userID, string apiKey)
+        public static CacheResult GetCharacters(int userID, string apiKey)
         {
             return QueryAccountApi(@"/account/Characters.xml.aspx", userID, apiKey);
         }
 
-        public static CachedResult GetCharacterSheet(int userID, string apiKey, int characterID)
+        public static CacheResult GetCharacterSheet(int userID, string apiKey, int characterID)
         {
             return QueryCharacterApi(@"/char/CharacterSheet.xml.aspx", userID, apiKey, characterID);
         }
 
-        public static CachedResult GetCharacterAssetList(int userID, string apiKey, int characterID)
+        public static CacheResult GetCharacterAssetList(int userID, string apiKey, int characterID)
         {
             return QueryCharacterApi(@"/char/AssetList.xml.aspx", userID, apiKey, characterID);
         }
 
-        public static CachedResult GetCorporationAssetList(int userID, string apiKey, int characterID, int corporationID)
+        public static CacheResult GetCorporationAssetList(int userID, string apiKey, int characterID, int corporationID)
         {
             return QueryCorporationApi(@"/corp/AssetList.xml.aspx", userID, apiKey, characterID, corporationID);
         }
 
-        private static CachedResult QueryAccountApi(string apiPath, int userID, string apiKey)
+        private static CacheResult QueryAccountApi(string apiPath, int userID, string apiKey)
         {
             Dictionary<string, string> parameters = new Dictionary<string, string>();
 
@@ -57,7 +57,7 @@ namespace HeavyDuck.Eve
             return QueryApi(apiPath, parameters);
         }
 
-        private static CachedResult QueryCharacterApi(string apiPath, int userID, string apiKey, int characterID)
+        private static CacheResult QueryCharacterApi(string apiPath, int userID, string apiKey, int characterID)
         {
             Dictionary<string, string> parameters = new Dictionary<string, string>();
 
@@ -71,7 +71,7 @@ namespace HeavyDuck.Eve
             return QueryApi(apiPath, parameters);
         }
 
-        private static CachedResult QueryCorporationApi(string apiPath, int userID, string apiKey, int characterID, int corporationID)
+        private static CacheResult QueryCorporationApi(string apiPath, int userID, string apiKey, int characterID, int corporationID)
         {
             Dictionary<string, string> parameters = new Dictionary<string, string>();
 
@@ -86,10 +86,10 @@ namespace HeavyDuck.Eve
             return QueryApi(apiPath, parameters);
         }
 
-        public static CachedResult QueryApi(string apiPath, IDictionary<string, string> parameters)
+        public static CacheResult QueryApi(string apiPath, IDictionary<string, string> parameters)
         {
             string cachePath;
-            CachedResult currentResult;
+            CacheResult currentResult;
 
             // check parameters
             if (string.IsNullOrEmpty(apiPath)) throw new ArgumentNullException("apiPath");
@@ -129,7 +129,7 @@ namespace HeavyDuck.Eve
         /// </summary>
         /// <param name="apiPath">The EVE API path used to retrieve the cached file.</param>
         /// <param name="parameters">The EVE API parameters used to retrieve the cached file.</param>
-        private static CachedResult IsFileCached(string apiPath, IDictionary<string, string> parameters)
+        private static CacheResult IsFileCached(string apiPath, IDictionary<string, string> parameters)
         {
             return IsFileCached(GetCachePath(apiPath, parameters));
         }
@@ -138,10 +138,10 @@ namespace HeavyDuck.Eve
         /// Checks the state of the cache for a particular file.
         /// </summary>
         /// <param name="filePath">The filesystem path to the cached file.</param>
-        private static CachedResult IsFileCached(string filePath)
+        private static CacheResult IsFileCached(string filePath)
         {
             // check whether it even exists
-            if (!File.Exists(filePath)) return CachedResult.Uncached(filePath);
+            if (!File.Exists(filePath)) return CacheResult.Uncached(filePath);
 
             // open and look for the cachedUntil element
             try
@@ -160,14 +160,14 @@ namespace HeavyDuck.Eve
 
                     // now we can compare to the current time
                     if (DateTime.Now < cachedUntil)
-                        return new CachedResult(filePath, false, CacheState.Cached, cachedUntil);
+                        return new CacheResult(filePath, false, CacheState.Cached, cachedUntil);
                     else
-                        return new CachedResult(filePath, false, CacheState.CachedOutOfDate, cachedUntil);
+                        return new CacheResult(filePath, false, CacheState.CachedOutOfDate, cachedUntil);
                 }
             }
             catch (Exception ex)
             {
-                return CachedResult.Uncached(filePath, ex);
+                return CacheResult.Uncached(filePath, ex);
             }
         }
 

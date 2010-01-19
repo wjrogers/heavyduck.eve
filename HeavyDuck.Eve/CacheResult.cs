@@ -7,7 +7,7 @@ namespace HeavyDuck.Eve
     /// <summary>
     /// Contains information on a file in the local cache.
     /// </summary>
-    public class CachedResult
+    public class CacheResult
     {
         private string m_path;
         private bool m_updated;
@@ -22,7 +22,7 @@ namespace HeavyDuck.Eve
         /// <param name="updated">If the file was updated as a result of this request, true; otherwise, false.</param>
         /// <param name="state">The state of the cache for this file.</param>
         /// <param name="cachedUntil">The time the cache expires.</param>
-        public CachedResult(string path, bool updated, CacheState state, DateTime cachedUntil) : this(path, updated, state, cachedUntil, null) { }
+        public CacheResult(string path, bool updated, CacheState state, DateTime cachedUntil) : this(path, updated, state, cachedUntil, null) { }
 
         /// <summary>
         /// Creates a new instance of CachedResult.
@@ -32,7 +32,7 @@ namespace HeavyDuck.Eve
         /// <param name="state">The state of the cache for this file.</param>
         /// <param name="cachedUntil">The time the cache expires.</param>
         /// <param name="ex">The exception that prevented the file from being updated, if any.</param>
-        public CachedResult(string path, bool updated, CacheState state, DateTime cachedUntil, Exception ex)
+        public CacheResult(string path, bool updated, CacheState state, DateTime cachedUntil, Exception ex)
         {
             m_path = path;
             m_updated = updated;
@@ -86,16 +86,16 @@ namespace HeavyDuck.Eve
         /// </summary>
         /// <param name="existing">The existing cachedResult.</param>
         /// <param name="ex">The new exception that prevented it from being updated.</param>
-        public static CachedResult FromExisting(CachedResult existing, Exception ex)
+        public static CacheResult FromExisting(CacheResult existing, Exception ex)
         {
-            return new CachedResult(existing.Path, false, existing.State, existing.CachedUntil, ex);
+            return new CacheResult(existing.Path, false, existing.State, existing.CachedUntil, ex);
         }
 
         /// <summary>
         /// Gets a default CachedResult instance with the Uncached state.
         /// </summary>
         /// <param name="path">The path to the cached file.</param>
-        public static CachedResult Uncached(string path)
+        public static CacheResult Uncached(string path)
         {
             return Uncached(path, null);
         }
@@ -104,7 +104,7 @@ namespace HeavyDuck.Eve
         /// Gets a default CachedResult instance with the Uncached state.
         /// </summary>
         /// <param name="ex">The exception that prevented the file from being updated, if any.</param>
-        public static CachedResult Uncached(Exception ex)
+        public static CacheResult Uncached(Exception ex)
         {
             return Uncached(null, ex);
         }
@@ -114,9 +114,9 @@ namespace HeavyDuck.Eve
         /// </summary>
         /// <param name="path">The path to the cached file.</param>
         /// <param name="ex">The exception that prevented the file from being updated, if any.</param>
-        public static CachedResult Uncached(string path, Exception ex)
+        public static CacheResult Uncached(string path, Exception ex)
         {
-            return new CachedResult(path, false, CacheState.Uncached, DateTime.MinValue, ex);
+            return new CacheResult(path, false, CacheState.Uncached, DateTime.MinValue, ex);
         }
     }
 
