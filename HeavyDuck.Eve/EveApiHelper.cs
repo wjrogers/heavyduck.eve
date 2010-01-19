@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -88,18 +89,19 @@ namespace HeavyDuck.Eve
         public static CachedResult QueryApi(string apiPath, IDictionary<string, string> parameters)
         {
             string cachePath;
-            CacheState currentState;
+            CachedResult currentResult;
 
             // check parameters
             if (string.IsNullOrEmpty(apiPath)) throw new ArgumentNullException("apiPath");
 
             // for the API we have special logic to check whether the file is cached, so do this first
             cachePath = GetCachePath(apiPath, parameters);
-            currentState = IsFileCached(cachePath);
-            if (currentState == CacheState.Cached) return new CachedResult(cachePath, false, currentState, null);
+            currentResult = IsFileCached(cachePath);
+            if (currentResult.State == CacheState.Cached)
+                return currentResult;
 
             // query the API
-            return Resources.CacheFilePost(new Uri(m_apiRoot, apiPath).ToString(), cachePath, 0, parameters, delegate(string tempPath)
+            currentResult = Resources.CacheFilePost(new Uri(m_apiRoot, apiPath).ToString(), cachePath, TimeSpan.Zero, parameters, delegate(string tempPath)
             {
                 // inspect the resulting file for errors
                 using (FileStream tempStream = File.Open(tempPath, FileMode.Open, FileAccess.Read))
@@ -117,6 +119,9 @@ namespace HeavyDuck.Eve
                         throw new EveApiException(0, "No valid eveapi XML found in response.");
                 }
             });
+
+            // return the new state with correct cache expiration
+            return IsFileCached(cachePath);
         }
 
         /// <summary>
@@ -124,7 +129,7 @@ namespace HeavyDuck.Eve
         /// </summary>
         /// <param name="apiPath">The EVE API path used to retrieve the cached file.</param>
         /// <param name="parameters">The EVE API parameters used to retrieve the cached file.</param>
-        private static CacheState IsFileCached(string apiPath, IDictionary<string, string> parameters)
+        private static CachedResult IsFileCached(string apiPath, IDictionary<string, string> parameters)
         {
             return IsFileCached(GetCachePath(apiPath, parameters));
         }
@@ -133,10 +138,10 @@ namespace HeavyDuck.Eve
         /// Checks the state of the cache for a particular file.
         /// </summary>
         /// <param name="filePath">The filesystem path to the cached file.</param>
-        private static CacheState IsFileCached(string filePath)
+        private static CachedResult IsFileCached(string filePath)
         {
             // check whether it even exists
-            if (!File.Exists(filePath)) return CacheState.Uncached;
+            if (!File.Exists(filePath)) return CachedResult.Uncached(filePath);
 
             // open and look for the cachedUntil element
             try
@@ -146,19 +151,23 @@ namespace HeavyDuck.Eve
                     XPathDocument doc = new XPathDocument(fs);
                     XPathNavigator nav = doc.CreateNavigator();
                     XPathNavigator cacheNode;
-                    DateTime cacheTime;
+                    DateTime cachedUntil;
 
                     // parse the cached-until date from the XML
                     cacheNode = nav.SelectSingleNode("/eveapi/cachedUntil");
-                    cacheTime = DateTime.Parse(cacheNode.Value);
+                    cachedUntil = DateTime.Parse(cacheNode.Value, CultureInfo.InvariantCulture);
+                    cachedUntil = TimeZone.CurrentTimeZone.ToLocalTime(cachedUntil);
 
                     // now we can compare to the current time
-                    return TimeZone.CurrentTimeZone.ToUniversalTime(DateTime.Now) < cacheTime ? CacheState.Cached : CacheState.CachedOutOfDate;
+                    if (DateTime.Now < cachedUntil)
+                        return new CachedResult(filePath, false, CacheState.Cached, cachedUntil);
+                    else
+                        return new CachedResult(filePath, false, CacheState.CachedOutOfDate, cachedUntil);
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                return CacheState.Uncached;
+                return CachedResult.Uncached(filePath, ex);
             }
         }
 
