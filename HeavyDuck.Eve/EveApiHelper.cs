@@ -89,19 +89,17 @@ namespace HeavyDuck.Eve
         public static CacheResult QueryApi(string apiPath, IDictionary<string, string> parameters)
         {
             string cachePath;
-            CacheResult currentResult;
+            ICacheStrategy cacheStrategy;
 
             // check parameters
             if (string.IsNullOrEmpty(apiPath)) throw new ArgumentNullException("apiPath");
 
-            // for the API we have special logic to check whether the file is cached, so do this first
+            // for the API we have special logic to check whether the file is cached
+            cacheStrategy = new EveApiCacheStrategy();
             cachePath = GetCachePath(apiPath, parameters);
-            currentResult = IsFileCached(cachePath);
-            if (currentResult.State == CacheState.Cached)
-                return currentResult;
 
             // query the API
-            currentResult = Resources.CacheFilePost(new Uri(m_apiRoot, apiPath).ToString(), cachePath, TimeSpan.Zero, parameters, delegate(string tempPath)
+            return Resources.CacheFilePost(new Uri(m_apiRoot, apiPath).ToString(), cachePath, cacheStrategy, parameters, delegate(string tempPath)
             {
                 // inspect the resulting file for errors
                 using (FileStream tempStream = File.Open(tempPath, FileMode.Open, FileAccess.Read))
@@ -119,58 +117,29 @@ namespace HeavyDuck.Eve
                         throw new EveApiException(0, "No valid eveapi XML found in response.");
                 }
             });
-
-            // return the new state with correct cache expiration
-            if (currentResult.State == CacheState.Uncached)
-                return currentResult;
-            else
-                return IsFileCached(cachePath);
         }
 
         /// <summary>
-        /// Checks the state of the cache for a particular file.
+        /// Reads the cachedUntil element from an EVE API result.
         /// </summary>
-        /// <param name="apiPath">The EVE API path used to retrieve the cached file.</param>
-        /// <param name="parameters">The EVE API parameters used to retrieve the cached file.</param>
-        private static CacheResult IsFileCached(string apiPath, IDictionary<string, string> parameters)
+        /// <param name="filePath">the path to the EVE API XML file</param>
+        /// <returns>the cache expiration time in local time</returns>
+        private static DateTime ReadCachedUntil(string filePath)
         {
-            return IsFileCached(GetCachePath(apiPath, parameters));
-        }
-
-        /// <summary>
-        /// Checks the state of the cache for a particular file.
-        /// </summary>
-        /// <param name="filePath">The filesystem path to the cached file.</param>
-        private static CacheResult IsFileCached(string filePath)
-        {
-            // check whether it even exists
-            if (!File.Exists(filePath)) return CacheResult.Uncached(filePath);
-
-            // open and look for the cachedUntil element
-            try
+            using (FileStream fs = File.Open(filePath, FileMode.Open, FileAccess.Read))
             {
-                using (FileStream fs = File.Open(filePath, FileMode.Open, FileAccess.Read))
-                {
-                    XPathDocument doc = new XPathDocument(fs);
-                    XPathNavigator nav = doc.CreateNavigator();
-                    XPathNavigator cacheNode;
-                    DateTime cachedUntil;
+                XPathDocument doc = new XPathDocument(fs);
+                XPathNavigator nav = doc.CreateNavigator();
+                XPathNavigator cacheNode;
+                DateTime cachedUntil;
 
-                    // parse the cached-until date from the XML
-                    cacheNode = nav.SelectSingleNode("/eveapi/cachedUntil");
-                    cachedUntil = DateTime.Parse(cacheNode.Value, CultureInfo.InvariantCulture);
-                    cachedUntil = TimeZone.CurrentTimeZone.ToLocalTime(cachedUntil);
+                // parse the cached-until date from the XML
+                cacheNode = nav.SelectSingleNode("/eveapi/cachedUntil");
+                cachedUntil = DateTime.Parse(cacheNode.Value, CultureInfo.InvariantCulture);
+                cachedUntil = TimeZone.CurrentTimeZone.ToLocalTime(cachedUntil);
 
-                    // now we can compare to the current time
-                    if (DateTime.Now < cachedUntil)
-                        return new CacheResult(filePath, false, CacheState.Cached, cachedUntil);
-                    else
-                        return new CacheResult(filePath, false, CacheState.CachedOutOfDate, cachedUntil);
-                }
-            }
-            catch (Exception ex)
-            {
-                return CacheResult.Uncached(filePath, ex);
+                // return the date in local time
+                return cachedUntil;
             }
         }
 
@@ -197,6 +166,18 @@ namespace HeavyDuck.Eve
                 Directory.CreateDirectory(dirPath);
 
             return cachePath;
+        }
+
+        private class EveApiCacheStrategy : ICacheStrategy
+        {
+            #region ICacheStrategy Members
+
+            public DateTime GetCachedUntil(string path)
+            {
+                return ReadCachedUntil(path);
+            }
+
+            #endregion
         }
     }
 }

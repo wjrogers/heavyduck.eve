@@ -58,7 +58,19 @@ namespace HeavyDuck.Eve
         /// <param name="action">A validation or processing action to be run after downloading the file but before copying it to <paramref name="cachePath"/>.</param>
         public static CacheResult CacheFile(string url, string cachePath, TimeSpan ttl, PostDownloadAction action)
         {
-            return CacheFileInternal(HttpMethod.Get, url, cachePath, ttl, null, action);
+            return CacheFileInternal(HttpMethod.Get, url, cachePath, new TtlCacheStrategy(ttl), null, action);
+        }
+
+        /// <summary>
+        /// Caches a file from the web using the GET method.
+        /// </summary>
+        /// <param name="url">The url to request.</param>
+        /// <param name="cachePath">The path where the cached file will be saved.</param>
+        /// <param name="cacheStrategy">decides file cache state and duration</param>
+        /// <param name="action">A validation or processing action to be run after downloading the file but before copying it to <paramref name="cachePath"/>.</param>
+        public static CacheResult CacheFile(string url, string cachePath, ICacheStrategy cacheStrategy, PostDownloadAction action)
+        {
+            return CacheFileInternal(HttpMethod.Get, url, cachePath, cacheStrategy, null, action);
         }
 
         /// <summary>
@@ -83,7 +95,20 @@ namespace HeavyDuck.Eve
         /// <param name="action">A validation or processing action to be run after downloading the file but before copying it to <paramref name="cachePath"/>.</param>
         public static CacheResult CacheFilePost(string url, string cachePath, TimeSpan ttl, IEnumerable<KeyValuePair<string, string>> parameters, PostDownloadAction action)
         {
-            return CacheFileInternal(HttpMethod.Post, url, cachePath, ttl, parameters, action);
+            return CacheFileInternal(HttpMethod.Post, url, cachePath, new TtlCacheStrategy(ttl), parameters, action);
+        }
+
+        /// <summary>
+        /// Caches a file from the web using the POST method.
+        /// </summary>
+        /// <param name="url">The url to request.</param>
+        /// <param name="cachePath">The path where the cached file will be saved.</param>
+        /// <param name="cacheStrategy">decides file cache state and duration</param>
+        /// <param name="parameters">The POST parameters.</param>
+        /// <param name="action">A validation or processing action to be run after downloading the file but before copying it to <paramref name="cachePath"/>.</param>
+        public static CacheResult CacheFilePost(string url, string cachePath, ICacheStrategy cacheStrategy, IEnumerable<KeyValuePair<string, string>> parameters, PostDownloadAction action)
+        {
+            return CacheFileInternal(HttpMethod.Post, url, cachePath, cacheStrategy, parameters, action);
         }
 
         /// <summary>
@@ -92,10 +117,10 @@ namespace HeavyDuck.Eve
         /// <param name="method">specifies GET or POST</param>
         /// <param name="url">the url to request</param>
         /// <param name="cachePath">the path where the cached file will be saved</param>
-        /// <param name="ttl">amount of time before the cache expires</param>
+        /// <param name="cacheStrategy">decides file cache state and duration</param>
         /// <param name="parameters">parameters for POST requests</param>
         /// <param name="action">a validation or processing action to be run after downloading the file but before copying it to <paramref name="cachePath"/></param>
-        private static CacheResult CacheFileInternal(HttpMethod method, string url, string cachePath, TimeSpan ttl, IEnumerable<KeyValuePair<string, string>> parameters, PostDownloadAction action)
+        private static CacheResult CacheFileInternal(HttpMethod method, string url, string cachePath, ICacheStrategy cacheStrategy, IEnumerable<KeyValuePair<string, string>> parameters, PostDownloadAction action)
         {
             CacheResult currentResult;
             string tempPath = null;
@@ -105,7 +130,7 @@ namespace HeavyDuck.Eve
                 throw new ArgumentException("GET method and parameters don't mix");
 
             // check whether the file is cached
-            currentResult = IsFileCached(cachePath, ttl);
+            currentResult = IsFileCached(cachePath, cacheStrategy);
             if (currentResult.State == CacheState.Cached)
                 return currentResult;
 
@@ -132,7 +157,7 @@ namespace HeavyDuck.Eve
                 File.Copy(tempPath, cachePath, true);
 
                 // return success
-                return new CacheResult(cachePath, true, CacheState.Cached, File.GetLastWriteTime(cachePath).Add(ttl));
+                return new CacheResult(cachePath, true, CacheState.Cached, cacheStrategy.GetCachedUntil(cachePath));
             }
             catch (Exception ex)
             {
@@ -272,6 +297,17 @@ namespace HeavyDuck.Eve
         /// <param name="ttl">The amount of time before the file is considered out of date.</param>
         public static CacheResult IsFileCached(string path, TimeSpan ttl)
         {
+            return IsFileCached(path, new TtlCacheStrategy(ttl));
+        }
+
+        /// <summary>
+        /// Checks whether a file exists and is fresh.
+        /// </summary>
+        /// <param name="path">the path to the cached file</param>
+        /// <param name="cacheStrategy">decides cache state and duration</param>
+        /// <returns></returns>
+        public static CacheResult IsFileCached(string path, ICacheStrategy cacheStrategy)
+        {
             try
             {
                 FileInfo info = new FileInfo(path);
@@ -279,7 +315,7 @@ namespace HeavyDuck.Eve
 
                 if (info.Exists)
                 {
-                    cachedUntil = info.LastWriteTime.Add(ttl);
+                    cachedUntil = cacheStrategy.GetCachedUntil(path);
 
                     if (DateTime.Now < cachedUntil)
                         return new CacheResult(path, false, CacheState.Cached, cachedUntil);
