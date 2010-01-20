@@ -121,7 +121,10 @@ namespace HeavyDuck.Eve
             });
 
             // return the new state with correct cache expiration
-            return IsFileCached(cachePath);
+            if (currentResult.State == CacheState.Uncached)
+                return currentResult;
+            else
+                return IsFileCached(cachePath);
         }
 
         /// <summary>

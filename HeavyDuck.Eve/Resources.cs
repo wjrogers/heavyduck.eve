@@ -9,6 +9,12 @@ namespace HeavyDuck.Eve
 {
     internal delegate void PostDownloadAction(string tempPath);
 
+    internal enum HttpMethod
+    {
+        Get,
+        Post
+    }
+
     internal static class Resources
     {
         public const string USER_AGENT = "HeavyDuck.Eve";
@@ -52,42 +58,7 @@ namespace HeavyDuck.Eve
         /// <param name="action">A validation or processing action to be run after downloading the file but before copying it to <paramref name="cachePath"/>.</param>
         public static CacheResult CacheFile(string url, string cachePath, TimeSpan ttl, PostDownloadAction action)
         {
-            CacheResult currentResult = IsFileCached(cachePath, ttl);
-            string tempPath = null;
-
-            // check whether the file is cached
-            if (currentResult.State == CacheState.Cached)
-                return currentResult;
-
-            try
-            {
-                // download to a temp file
-                tempPath = DownloadUrlGet(url);
-
-                // call the PostDownloadAction if there is one
-                if (action != null)
-                    action(tempPath);
-
-                // we assume the file is fine if the PostDownloadAction didn't throw an exception
-                File.Copy(tempPath, cachePath, true);
-
-                // return success
-                return new CacheResult(cachePath, true, CacheState.Cached, File.GetLastWriteTime(cachePath).Add(ttl));
-            }
-            catch (Exception ex)
-            {
-                // if we currently have a valid local copy of the file, even if out of date, return that info
-                if (currentResult.State != CacheState.Uncached)
-                    return CacheResult.FromExisting(currentResult, ex);
-                else
-                    return CacheResult.Uncached(ex);
-            }
-            finally
-            {
-                // get rid of the temp file if we can
-                try { if (!string.IsNullOrEmpty(tempPath)) File.Delete(tempPath); }
-                catch { /* pass */ }
-            }
+            return CacheFileInternal(HttpMethod.Get, url, cachePath, ttl, null, action);
         }
 
         /// <summary>
@@ -112,17 +83,46 @@ namespace HeavyDuck.Eve
         /// <param name="action">A validation or processing action to be run after downloading the file but before copying it to <paramref name="cachePath"/>.</param>
         public static CacheResult CacheFilePost(string url, string cachePath, TimeSpan ttl, IEnumerable<KeyValuePair<string, string>> parameters, PostDownloadAction action)
         {
-            CacheResult currentResult = IsFileCached(cachePath, ttl);
+            return CacheFileInternal(HttpMethod.Post, url, cachePath, ttl, parameters, action);
+        }
+
+        /// <summary>
+        /// Caches a file from the internets.
+        /// </summary>
+        /// <param name="method">specifies GET or POST</param>
+        /// <param name="url">the url to request</param>
+        /// <param name="cachePath">the path where the cached file will be saved</param>
+        /// <param name="ttl">amount of time before the cache expires</param>
+        /// <param name="parameters">parameters for POST requests</param>
+        /// <param name="action">a validation or processing action to be run after downloading the file but before copying it to <paramref name="cachePath"/></param>
+        private static CacheResult CacheFileInternal(HttpMethod method, string url, string cachePath, TimeSpan ttl, IEnumerable<KeyValuePair<string, string>> parameters, PostDownloadAction action)
+        {
+            CacheResult currentResult;
             string tempPath = null;
 
+            // validate parameters
+            if (method == HttpMethod.Get && parameters != null)
+                throw new ArgumentException("GET method and parameters don't mix");
+
             // check whether the file is cached
+            currentResult = IsFileCached(cachePath, ttl);
             if (currentResult.State == CacheState.Cached)
                 return currentResult;
 
             try
             {
                 // download to a temp file
-                tempPath = DownloadUrlPost(url, parameters);
+                switch (method)
+                {
+                    case HttpMethod.Get:
+                        tempPath = DownloadUrlGet(url);
+                        break;
+                    case HttpMethod.Post:
+                        tempPath = DownloadUrlPost(url, parameters);
+                        break;
+                    default:
+                        throw new ArgumentException("Unknown HTTP method " + method.ToString());
+                }
 
                 // call the PostDownloadAction if there is one
                 if (action != null)
