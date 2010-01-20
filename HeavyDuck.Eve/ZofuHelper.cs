@@ -79,38 +79,21 @@ namespace HeavyDuck.Eve
             return result;
         }
 
-        private static void DownloadRegionFile(int regionID)
+        private static CacheResult DownloadRegionFile(int regionID)
         {
             string path = Path.Combine(m_cachePath, GetRegionFileName(regionID));
-            string temp = null;
+            string url = GetRegionUri(regionID).ToString();
 
-            try
+            // create the cache path if it doesn't exist
+            Directory.CreateDirectory(m_cachePath);
+
+            // cache it
+            return Resources.CacheFile(url, path, m_cacheTtl, delegate(string tempPath)
             {
-                // create the cache path if it doesn't exist
-                Directory.CreateDirectory(m_cachePath);
-
-                // check whether the file is already adequately cached
-                if (File.Exists(path) && DateTime.Now.Subtract(File.GetLastWriteTime(path)) < m_cacheTtl)
-                    return;
-
-                // if not, download it
-                temp = Resources.DownloadUrlGet(GetRegionUri(regionID).ToString());
-
                 // parse it
                 lock (m_cache)
-                    m_cache[regionID] = ParseFile(temp);
-
-                // copy file
-                File.Copy(temp, path, true);
-            }
-            finally
-            {
-                if (temp != null)
-                {
-                    try { File.Delete(temp); }
-                    catch { /* pass */ }
-                }
-            }
+                    m_cache[regionID] = ParseFile(tempPath);
+            });
         }
 
         private static decimal GetPriceInternal(int typeID, int regionID, PriceStat stat)
@@ -130,30 +113,17 @@ namespace HeavyDuck.Eve
             Dictionary<int, ZofuEntry> regionCache;
             Dictionary<int, decimal> result = new Dictionary<int, decimal>();
             ZofuEntry entry;
+            CacheResult cacheResult;
 
-            try
-            {
-                // check and download the file if it's missing or out of date
-                DownloadRegionFile(regionID);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine(ex.ToString());
-
-                // fail out if we don't have existing cached data for this region
-                lock (m_cache)
-                {
-                    if (!m_cache.ContainsKey(regionID))
-                        throw new PriceProviderException(PriceProviderFailureReason.UnexpectedError, "Failed to retrieve prices for region " + regionID.ToString(), ex);
-                }
-            }
+            // check and download the file if it's missing or out of date
+            cacheResult = DownloadRegionFile(regionID);
 
             // all right, result, let's fill it
             lock (m_cache)
             {
                 // see if we have prices for the region
                 if (!m_cache.TryGetValue(regionID, out regionCache))
-                    throw new PriceProviderException(PriceProviderFailureReason.CacheEmpty, "No prices available for region " + regionID.ToString());
+                    throw new PriceProviderException(PriceProviderFailureReason.CacheEmpty, "No prices available for region " + regionID.ToString(), cacheResult.Exception);
 
                 // the easy part
                 foreach (int typeID in typeIDs)
