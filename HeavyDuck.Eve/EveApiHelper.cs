@@ -26,25 +26,25 @@ namespace HeavyDuck.Eve
 
         public static CacheResult GetCharacters(int userID, string apiKey)
         {
-            return QueryAccountApi(@"/account/Characters.xml.aspx", userID, apiKey);
+            return QueryApi(@"/account/Characters.xml.aspx", GetAccountParameters(userID, apiKey));
         }
 
         public static CacheResult GetCharacterSheet(int userID, string apiKey, int characterID)
         {
-            return QueryCharacterApi(@"/char/CharacterSheet.xml.aspx", userID, apiKey, characterID);
+            return QueryApi(@"/char/CharacterSheet.xml.aspx", GetCharacterParameters(userID, apiKey, characterID));
         }
 
         public static CacheResult GetCharacterAssetList(int userID, string apiKey, int characterID)
         {
-            return QueryCharacterApi(@"/char/AssetList.xml.aspx", userID, apiKey, characterID);
+            return QueryApi(@"/char/AssetList.xml.aspx", GetCharacterParameters(userID, apiKey, characterID));
         }
 
         public static CacheResult GetCorporationAssetList(int userID, string apiKey, int characterID, int corporationID)
         {
-            return QueryCorporationApi(@"/corp/AssetList.xml.aspx", userID, apiKey, characterID, corporationID);
+            return QueryApi(@"/corp/AssetList.xml.aspx", GetCorporationParameters(userID, apiKey, characterID, corporationID));
         }
 
-        private static CacheResult QueryAccountApi(string apiPath, int userID, string apiKey)
+        private static Dictionary<string, string> GetAccountParameters(int userID, string apiKey)
         {
             Dictionary<string, string> parameters = new Dictionary<string, string>();
 
@@ -53,11 +53,11 @@ namespace HeavyDuck.Eve
             parameters["apiKey"] = apiKey;
             parameters["version"] = "2";
 
-            // call the basic query method
-            return QueryApi(apiPath, parameters);
+            // return them
+            return parameters;
         }
 
-        private static CacheResult QueryCharacterApi(string apiPath, int userID, string apiKey, int characterID)
+        private static Dictionary<string, string> GetCharacterParameters(int userID, string apiKey, int characterID)
         {
             Dictionary<string, string> parameters = new Dictionary<string, string>();
 
@@ -67,11 +67,11 @@ namespace HeavyDuck.Eve
             parameters["characterID"] = characterID.ToString();
             parameters["version"] = "2";
 
-            // call the basic query method
-            return QueryApi(apiPath, parameters);
+            // return them
+            return parameters;
         }
 
-        private static CacheResult QueryCorporationApi(string apiPath, int userID, string apiKey, int characterID, int corporationID)
+        private static Dictionary<string, string> GetCorporationParameters(int userID, string apiKey, int characterID, int corporationID)
         {
             Dictionary<string, string> parameters = new Dictionary<string, string>();
 
@@ -82,8 +82,8 @@ namespace HeavyDuck.Eve
             parameters["corporationID"] = corporationID.ToString();
             parameters["version"] = "2";
 
-            // call the basic query method
-            return QueryApi(apiPath, parameters);
+            // return them
+            return parameters;
         }
 
         public static CacheResult QueryApi(string apiPath, IDictionary<string, string> parameters)
