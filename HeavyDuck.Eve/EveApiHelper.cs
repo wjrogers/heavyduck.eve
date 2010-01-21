@@ -12,6 +12,9 @@ namespace HeavyDuck.Eve
 {
     public static class EveApiHelper
     {
+        private const string API_CHAR_ASSETLIST = @"/char/AssetList.xml.aspx";
+        private const string API_CORP_ASSETLIST = @"/corp/AssetList.xml.aspx";
+
         private static readonly Regex m_regexAspx = new Regex(@"\.aspx$");
         private static readonly UTF8Encoding m_encoding = new UTF8Encoding(false);
 
@@ -36,12 +39,22 @@ namespace HeavyDuck.Eve
 
         public static CacheResult GetCharacterAssetList(int userID, string apiKey, int characterID)
         {
-            return QueryApi(@"/char/AssetList.xml.aspx", GetCharacterParameters(userID, apiKey, characterID));
+            return QueryApi(API_CHAR_ASSETLIST, GetCharacterParameters(userID, apiKey, characterID));
+        }
+
+        public static CacheResult CheckCharacterAssetList(int userID, string apiKey, int characterID)
+        {
+            return CheckApi(API_CHAR_ASSETLIST, GetCharacterParameters(userID, apiKey, characterID));
         }
 
         public static CacheResult GetCorporationAssetList(int userID, string apiKey, int characterID, int corporationID)
         {
-            return QueryApi(@"/corp/AssetList.xml.aspx", GetCorporationParameters(userID, apiKey, characterID, corporationID));
+            return QueryApi(API_CORP_ASSETLIST, GetCorporationParameters(userID, apiKey, characterID, corporationID));
+        }
+
+        public static CacheResult CheckCorporationAssetList(int userID, string apiKey, int characterID, int corporationID)
+        {
+            return CheckApi(API_CORP_ASSETLIST, GetCorporationParameters(userID, apiKey, characterID, corporationID));
         }
 
         private static Dictionary<string, string> GetAccountParameters(int userID, string apiKey)
@@ -86,17 +99,23 @@ namespace HeavyDuck.Eve
             return parameters;
         }
 
+        /// <summary>
+        /// Gets the current cache status of an API query.
+        /// </summary>
+        /// <param name="apiPath">the API URL relative to the API root</param>
+        /// <param name="parameters">the API parameters</param>
+        public static CacheResult CheckApi(string apiPath, IDictionary<string, string> parameters)
+        {
+            string cachePath = GetCachePath(apiPath, parameters);
+            ICacheStrategy cacheStrategy = new EveApiCacheStrategy();
+
+            return Resources.IsFileCached(cachePath, cacheStrategy);
+        }
+
         public static CacheResult QueryApi(string apiPath, IDictionary<string, string> parameters)
         {
-            string cachePath;
-            ICacheStrategy cacheStrategy;
-
-            // check parameters
-            if (string.IsNullOrEmpty(apiPath)) throw new ArgumentNullException("apiPath");
-
-            // for the API we have special logic to check whether the file is cached
-            cacheStrategy = new EveApiCacheStrategy();
-            cachePath = GetCachePath(apiPath, parameters);
+            string cachePath = GetCachePath(apiPath, parameters);
+            ICacheStrategy cacheStrategy = new EveApiCacheStrategy();
 
             // query the API
             return Resources.CacheFilePost(new Uri(m_apiRoot, apiPath).ToString(), cachePath, cacheStrategy, parameters, delegate(string tempPath)
@@ -149,6 +168,9 @@ namespace HeavyDuck.Eve
             string paramHash;
             string cachePath;
             string dirPath;
+
+            // check parameters
+            if (string.IsNullOrEmpty(apiPath)) throw new ArgumentNullException("apiPath");
 
             // munge up the api path to be a file system path
             mungedApiPath = apiPath.StartsWith("/") ? apiPath.Substring(1) : apiPath;
