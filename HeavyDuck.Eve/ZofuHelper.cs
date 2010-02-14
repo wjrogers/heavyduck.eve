@@ -79,13 +79,26 @@ namespace HeavyDuck.Eve
             return result;
         }
 
-        private static CacheResult DownloadRegionFile(int regionID)
+        private void OnUpdateProgress(int progress, int max)
+        {
+            EventHandler<ProgressEventArgs> handler = UpdateProgress;
+
+            if (handler != null)
+                handler(this, new ProgressEventArgs(progress, max));
+        }
+
+        private CacheResult DownloadRegionFile(int regionID)
         {
             string path = Path.Combine(m_cachePath, GetRegionFileName(regionID));
             string url = GetRegionUri(regionID).ToString();
 
             // create the cache path if it doesn't exist
             Directory.CreateDirectory(m_cachePath);
+
+            // check first what the current state is so we can raise the progress event
+            CacheResult current = Resources.IsFileCached(path, m_cacheTtl);
+            if (current.State != CacheState.Cached)
+                OnUpdateProgress(0, 1);
 
             // cache it
             return Resources.CacheFile(url, path, m_cacheTtl, delegate(string tempPath)
@@ -96,7 +109,7 @@ namespace HeavyDuck.Eve
             });
         }
 
-        private static decimal GetPriceInternal(int typeID, int regionID, PriceStat stat)
+        private decimal GetPriceInternal(int typeID, int regionID, PriceStat stat)
         {
             Dictionary<int, decimal> result;
             decimal value;
@@ -108,7 +121,7 @@ namespace HeavyDuck.Eve
                 return value;
         }
 
-        private static Dictionary<int, decimal> GetPricesInternal(IEnumerable<int> typeIDs, int regionID, PriceStat stat)
+        private Dictionary<int, decimal> GetPricesInternal(IEnumerable<int> typeIDs, int regionID, PriceStat stat)
         {
             Dictionary<int, ZofuEntry> regionCache;
             Dictionary<int, decimal> result = new Dictionary<int, decimal>();
